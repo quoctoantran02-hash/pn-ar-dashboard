@@ -7,12 +7,15 @@ from pathlib import Path
 
 import requests
 from flask import Flask, jsonify, Response, request, send_file
-from flask_cors import CORS
 from google.auth.exceptions import GoogleAuthError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
-from waitress import serve
+
+try:
+    from waitress import serve
+except ImportError:
+    serve = None
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -45,15 +48,25 @@ MAX_AI_MESSAGE_LENGTH = 4000
 
 app = Flask(__name__)
 app.logger.setLevel(logging.INFO)
-CORS(
-    app,
-    resources={r"/api/*": {"origins": [
-        origin.strip()
-        for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",")
-        if origin.strip()
-    ]}},
-    supports_credentials=True,
-)
+FRONTEND_ORIGINS = {
+    origin.strip().rstrip("/")
+    for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",")
+    if origin.strip()
+}
+
+
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get("Origin")
+    if request.path.startswith("/api/") and origin and origin.rstrip("/") in FRONTEND_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Headers"] = (
+            request.headers.get("Access-Control-Request-Headers", "Content-Type")
+        )
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Vary"] = "Origin"
+    return response
 
 _oauth_lock = threading.Lock()
 _oauth_credentials = None
@@ -346,4 +359,7 @@ def ai_chat():
 
 if __name__ == "__main__":
     app.logger.info("Starting dashboard on %s:%s", HOST, PORT)
-    serve(app, host=HOST, port=PORT)
+    if serve is not None:
+        serve(app, host=HOST, port=PORT)
+    else:
+        app.run(host=HOST, port=PORT, debug=False)

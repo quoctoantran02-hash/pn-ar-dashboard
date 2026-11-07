@@ -46,7 +46,7 @@ def main() -> None:
     parser.add_argument("--output", default="dist")
     parser.add_argument(
         "--backend-url",
-        default=os.environ.get("FRONTEND_BACKEND_URL", ""),
+        default="",
         help="Public HTTPS URL of the dashboard backend.",
     )
     args = parser.parse_args()

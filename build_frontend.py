@@ -38,6 +38,7 @@ def build(output_dir: Path, backend_url: str) -> None:
         encoding="utf-8",
     )
     shutil.copy2(ROOT_DIR / "dior.png", output_dir / "dior.png")
+    shutil.copy2(ROOT_DIR / "header_cover.png", output_dir / "header_cover.png")
     shutil.copy2(ROOT_DIR / "_headers", output_dir / "_headers")
 
 

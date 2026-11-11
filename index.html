@@ -57,24 +57,80 @@
       <button class="ai-insight-launcher" id="aiInsightBtn">✨ AI Assistant</button>
       <aside class="ai-insight-panel" id="aiInsightPanel" aria-hidden="true">
         <div class="ai-insight-head">
-          <div class="chart-card-title"><div class="ic">✨</div><span class="chart-title-copy">AI Assistant</span></div>
-          <button class="ai-chat-new" id="aiChatNewBtn" type="button">Chat mới</button>
-          <button class="icon-btn" id="aiInsightCollapseBtn" title="Thu gọn AI insight" aria-label="Thu gọn AI insight">×</button>
+          <div class="ai-chat-identity">
+            <img class="ai-chat-brand-avatar" src="dior.png" alt="Dior">
+            <div>
+              <div class="ai-chat-name">Dior</div>
+              <div class="ai-chat-status"><span></span> Đang hoạt động</div>
+            </div>
+          </div>
+          <div class="ai-chat-actions">
+            <div class="ai-chat-history-wrap">
+              <button class="ai-chat-action-btn" id="aiChatHistoryBtn" type="button" aria-expanded="false" aria-controls="aiChatHistory">Lịch sử</button>
+              <div class="ai-chat-history" id="aiChatHistory" hidden></div>
+            </div>
+            <button class="ai-chat-action-btn ai-chat-new" id="aiChatNewBtn" type="button" aria-label="Tạo cuộc trò chuyện mới" title="Tạo cuộc trò chuyện mới">＋</button>
+            <button class="icon-btn" id="aiInsightCollapseBtn" title="Đóng cửa sổ chat" aria-label="Đóng cửa sổ chat">×</button>
+          </div>
         </div>
-        <div class="ai-insight-messages" id="aiChatMessages" aria-live="polite">
-          <div class="ai-chat-message-row assistant">
-            <img class="ai-chat-avatar" src="/dior.png" alt="Dior">
-            <div class="ai-chat-message assistant">Xin chào! Mình là Dior, trợ lý của Đào, mình có thể giúp bạn:
-- Phân tích thực trạng spam PN/AR trong timerange bạn đang filter
-- Giúp bạn tra cứu các user_id bị spam vào 1 ngày cụ thể, của 1 PN cụ thể
-- Gửi báo cáo tổng hợp về những đặc điểm của của các PN mang lại hiệu quả cao
-Hoặc bất kì câu hỏi nào về dữ liệu PN, feel free to ask nhé! ^^</div>
+        <div class="ai-insight-messages" id="aiChatMessages" aria-live="polite" aria-label="Nội dung hội thoại">
+          <div class="ai-welcome">
+            <div class="ai-welcome-hero">
+              <img class="ai-welcome-icon" src="dior.png" alt="Dior">
+              <h2>Xin chào! Mình là Dior 👋</h2>
+              <p>Trợ lý phân tích dữ liệu PN/AR, giúp bạn tìm insight và tối ưu hiệu quả thông báo.</p>
+            </div>
+            <h3>Bạn muốn phân tích điều gì hôm nay?</h3>
+            <div class="ai-prompt-grid">
+              <button class="ai-prompt-card spam" type="button" data-prompt="Phát hiện user_id bị nhận quá nhiều thông báo PN/AR trong khoảng thời gian đang lọc, và cho biết nhóm nào bị ảnh hưởng nhiều nhất.">
+                <span class="ai-prompt-icon">⛨</span>
+                <strong>Spam Detection</strong>
+                <span>Phát hiện user nhận quá nhiều thông báo.</span>
+              </button>
+              <button class="ai-prompt-card performance" type="button" data-prompt="Phân tích các PN/AR có hiệu quả thấp trong khoảng thời gian đang lọc. So sánh impression, click và CTR để tìm nguyên nhân.">
+                <span class="ai-prompt-icon">⌁</span>
+                <strong>Performance Analysis</strong>
+                <span>Tìm các PN/AR có hiệu quả thấp.</span>
+              </button>
+              <button class="ai-prompt-card summary" type="button" data-prompt="Tóm tắt hiệu quả PN/AR trong khoảng thời gian đang lọc, nêu các insight và chiến dịch nổi bật.">
+                <span class="ai-prompt-icon">▤</span>
+                <strong>Report Summary</strong>
+                <span>Tổng hợp báo cáo và insight nổi bật.</span>
+              </button>
+              <button class="ai-prompt-card optimization" type="button" data-prompt="Đề xuất cách tối ưu nội dung và tần suất gửi PN/AR dựa trên dữ liệu đang lọc.">
+                <span class="ai-prompt-icon">♧</span>
+                <strong>Optimization Tips</strong>
+                <span>Gợi ý tối ưu nội dung và tần suất gửi.</span>
+              </button>
+            </div>
+            <p class="ai-welcome-hint">Chọn một thẻ để điền câu hỏi vào khung chat.</p>
           </div>
         </div>
         <form class="ai-chat-form" id="aiChatForm">
-          <textarea id="aiChatInput" rows="2" maxlength="4000" placeholder="Nhập tin nhắn..." aria-label="Tin nhắn cho AI" required></textarea>
-          <button type="submit" id="aiChatSendBtn">Enter để Gửi</button>
+          <div class="ai-chat-composer">
+            <div class="ai-chat-attachments" id="aiChatAttachments" aria-live="polite" hidden></div>
+            <textarea id="aiChatInput" rows="2" maxlength="4000" placeholder="Nhập tin nhắn..." aria-label="Tin nhắn cho AI" required></textarea>
+            <div class="ai-chat-toolbar">
+              <input id="aiChatFileInput" type="file" multiple hidden>
+              <button class="ai-chat-attach" id="aiChatAttachBtn" type="button" aria-label="Đính kèm tệp">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 12.5 6.36-6.36a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.48a5 5 0 0 1-7.07-7.07l8.13-8.13"/></svg>
+                <span>Attach</span>
+              </button>
+              <span class="ai-chat-shortcut">Enter để gửi · Shift + Enter xuống dòng</span>
+              <button type="submit" id="aiChatSendBtn" aria-label="Gửi tin nhắn" title="Gửi tin nhắn">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13"/></svg>
+              </button>
+            </div>
+          </div>
         </form>
+        <dialog class="ai-chat-seatalk-dialog" id="aiChatSeatalkDialog" aria-labelledby="aiChatSeatalkDialogMessage">
+          <p id="aiChatSeatalkDialogMessage">Câu trả lời sẽ được gửi vào Seatalk của bạn khi hoàn tất quá trình phân tích!</p>
+          <div class="ai-chat-seatalk-dialog-actions">
+            <button type="button">Oke</button>
+            <button type="button" class="secondary" id="aiChatSeatalkDialogCancel">Cancel</button>
+          </div>
+        </dialog>
+        <div class="ai-chat-resize-handle" id="aiChatResizeHandle" role="separator" aria-orientation="vertical" aria-label="Kéo để thay đổi chiều rộng cửa sổ chat" tabindex="0"></div>
       </aside>
     </div>
 
@@ -99,21 +155,6 @@ Hoặc bất kì câu hỏi nào về dữ liệu PN, feel free to ask nhé! ^^<
   <!-- MAIN -->
   <main class="main">
     <div class="hero">
-      <div class="hero-left">
-        <h1><span class="bell">🔔</span>PN/AR Dashboard</h1>
-        <p class="tag">Track. Analyze. Optimize.</p>
-        <p class="sub">Better notifications. Better engagement. Better customer experience.</p>
-        <div class="hero-notes">
-          <div class="hero-notes-divider"></div>
-          <p class="hero-notes-label"><strong>Note:</strong></p>
-          <ul>
-            <li><strong>Data period:</strong> From 01/07 to date.</li>
-            <li><strong>Impression &amp; Click:</strong> Counted by event.</li>
-            <li><strong>PN data source:</strong> <a href="https://docs.google.com/spreadsheets/d/1nT82j-OckQdaxXlizRYjV3x0gCfllH_2J9_ilUat8p4/edit?gid=1955083918#gid=1955083918" target="_blank" rel="noopener noreferrer">VNCredit Campaign Ops Master Tracker</a>.</li>
-            <li><strong>For questions:</strong> Please contact <strong>quoctoan.tran02</strong>.</li>
-          </ul>
-        </div>
-      </div>
       <div class="daterange" id="heroRange">📅 —</div>
     </div>
 
@@ -333,6 +374,23 @@ Hoặc bất kì câu hỏi nào về dữ liệu PN, feel free to ask nhé! ^^<
         </div>
       </div>
     </div>
+    <footer class="dashboard-footer" aria-label="Dashboard notes">
+      <div class="dashboard-footer-grid">
+        <div class="dashboard-footer-item">
+          <p><strong>Data period</strong><span>From 01/07 to date.</span></p>
+        </div>
+        <div class="dashboard-footer-item">
+          <p><strong>Impression &amp; Click</strong><span>Counted by event.</span></p>
+        </div>
+        <div class="dashboard-footer-item">
+          <p><strong>PN data source</strong><span><a href="https://docs.google.com/spreadsheets/d/1nT82j-OckQdaxXlizRYjV3x0gCfllH_2J9_ilUat8p4/edit?gid=1955083918#gid=1955083918" target="_blank" rel="noopener noreferrer">VNCredit Campaign Ops Master Tracker</a>.</span></p>
+        </div>
+        <div class="dashboard-footer-item">
+          <p><strong>For questions</strong><span>Please contact <b>quoctoan.tran02</b>.</span></p>
+        </div>
+      </div>
+    </footer>
+
   </main>
 </div>
 

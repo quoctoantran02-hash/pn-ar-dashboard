@@ -58,9 +58,10 @@ $env:AI_AGENT_USER_ID = "<USER_ID>"
 .\run_local.bat
 ```
 
-Backend gửi yêu cầu đồng bộ đến deployment đã cấu hình, giữ `thread_id` trong
-cuộc trò chuyện hiện tại và trả lời trực tiếp trong bảng chat. Dùng **Chat mới**
-để bắt đầu một thread khác. Có thể thay deployment bằng `AI_AGENT_DEPLOYMENT_HASH_ID`.
+Backend gửi yêu cầu streaming đến deployment đã cấu hình và relay SSE để câu trả
+lời hiển thị dần trong bảng chat. Frontend lưu `session_id` từ event
+`response.start` để tiếp tục hội thoại hiện tại. Dùng **Chat mới** để bắt đầu
+một thread khác. Có thể thay deployment bằng `AI_AGENT_DEPLOYMENT_HASH_ID`.
 
 ## Cấu hình tùy chọn
 

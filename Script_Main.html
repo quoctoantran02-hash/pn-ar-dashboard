@@ -397,79 +397,754 @@ function wireAIChat(){
   const input = document.getElementById('aiChatInput');
   const sendButton = document.getElementById('aiChatSendBtn');
   const messages = document.getElementById('aiChatMessages');
+  const fileInput = document.getElementById('aiChatFileInput');
+  const attachButton = document.getElementById('aiChatAttachBtn');
+  const attachmentsContainer = document.getElementById('aiChatAttachments');
   const newChatButton = document.getElementById('aiChatNewBtn');
+  const historyButton = document.getElementById('aiChatHistoryBtn');
+  const historyMenu = document.getElementById('aiChatHistory');
+  const seatalkDialog = document.getElementById('aiChatSeatalkDialog');
+  const seatalkDialogCancel = document.getElementById('aiChatSeatalkDialogCancel');
+  const resizeHandle = document.getElementById('aiChatResizeHandle');
+  const panel = document.getElementById('aiInsightPanel');
   if (!form || !input || !sendButton || !messages) return;
 
-  let threadId = '';
-  const welcomeMessage = 'Xin chào! Mình là Dior, trợ lý của Đào, mình có thể giúp bạn:\n- Phân tích thực trạng spam PN/AR trong timerange bạn đang filter\n- Giúp bạn tra cứu các user_id bị spam vào 1 ngày cụ thể, của 1 PN cụ thể\n- Gửi báo cáo tổng hợp về những đặc điểm của của các PN mang lại hiệu quả cao\nHoặc bất kì câu hỏi nào về dữ liệu PN, feel free to ask nhé! ^^';
+  const historyKey = 'PNAR_AI_CHAT_HISTORY_V1';
+  const welcomeScreen = messages.querySelector('.ai-welcome');
+  const welcomeTemplate = welcomeScreen ? welcomeScreen.cloneNode(true) : null;
+  let activeConversation = null;
+  let storageWarningShown = false;
+  let conversations = [];
+  let selectedFiles = [];
 
-  const addMessage = (text, role) => {
+  const appendMarkdownInline = (container, text) => {
+    const tokenPattern = /`([^`\n]+)`|\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)|(\*\*|__)(.+?)\4|(\*|_)(.+?)\6|~~(.+?)~~/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = tokenPattern.exec(text))) {
+      container.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+      if (match[1] !== undefined) {
+        const code = document.createElement('code');
+        code.textContent = match[1];
+        container.appendChild(code);
+      } else if (match[2] !== undefined) {
+        let url;
+        try {
+          url = new URL(match[3]);
+        } catch (error) {
+          container.appendChild(document.createTextNode(match[0]));
+          lastIndex = tokenPattern.lastIndex;
+          continue;
+        }
+
+        if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+          container.appendChild(document.createTextNode(match[0]));
+        } else {
+          const link = document.createElement('a');
+          link.href = url.href;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          if (url.protocol === 'https:' && url.pathname.toLowerCase().endsWith('.pdf')) {
+            link.className = 'ai-chat-pdf-link';
+            link.setAttribute('aria-label', 'Tải tệp PDF ' + match[2]);
+            const badge = document.createElement('span');
+            badge.className = 'ai-chat-pdf-badge';
+            badge.textContent = 'PDF';
+            const name = document.createElement('span');
+            name.className = 'ai-chat-pdf-name';
+            name.textContent = match[2];
+            link.append(badge, name);
+          } else {
+            link.textContent = match[2];
+          }
+          container.appendChild(link);
+        }
+      } else {
+        const element = document.createElement(
+          match[4] ? 'strong' : match[6] ? 'em' : 'del'
+        );
+        appendMarkdownInline(element, match[5] || match[7] || match[8]);
+        container.appendChild(element);
+      }
+      lastIndex = tokenPattern.lastIndex;
+    }
+
+    container.appendChild(document.createTextNode(text.slice(lastIndex)));
+  };
+
+  const renderMarkdownBlocks = (container, text, depth = 0) => {
+    const lines = text.split(/\r?\n/);
+    let paragraphLines = [];
+    const splitTableRow = line => line.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim());
+    const flushParagraph = () => {
+      if (!paragraphLines.length) return;
+      const paragraph = document.createElement('p');
+      paragraph.className = 'ai-chat-markdown-paragraph';
+      paragraphLines.forEach((line, index) => {
+        if (index) {
+          if (/ {2,}$/.test(paragraphLines[index - 1])) {
+            paragraph.appendChild(document.createElement('br'));
+          } else {
+            paragraph.appendChild(document.createTextNode(' '));
+          }
+        }
+        appendMarkdownInline(paragraph, line.replace(/ {2,}$/, ''));
+      });
+      container.appendChild(paragraph);
+      paragraphLines = [];
+    };
+
+    for (let index = 0; index < lines.length;) {
+      const line = lines[index];
+      const fence = line.match(/^ {0,3}(```+|~~~+)\s*([\w+-]*)\s*$/);
+      const heading = line.match(/^ {0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+      const listItem = line.match(/^ {0,3}([-+*]|\d+[.)])\s+(.+)$/);
+      const quoteLine = line.match(/^ {0,3}>\s?(.*)$/);
+
+      if (!line.trim()) {
+        flushParagraph();
+        index += 1;
+        continue;
+      }
+
+      if (fence) {
+        flushParagraph();
+        const codeLines = [];
+        const fenceCharacter = fence[1][0];
+        const closingFence = new RegExp('^ {0,3}' + fenceCharacter + '{' + fence[1].length + ',}\\s*$');
+        index += 1;
+        while (index < lines.length && !closingFence.test(lines[index])) {
+          codeLines.push(lines[index]);
+          index += 1;
+        }
+        if (index < lines.length) index += 1;
+        const pre = document.createElement('pre');
+        const code = document.createElement('code');
+        if (fence[2]) code.className = 'language-' + fence[2];
+        code.textContent = codeLines.join('\n');
+        pre.appendChild(code);
+        container.appendChild(pre);
+        continue;
+      }
+
+      if (heading) {
+        flushParagraph();
+        const element = document.createElement('h' + heading[1].length);
+        appendMarkdownInline(element, heading[2]);
+        container.appendChild(element);
+        index += 1;
+        continue;
+      }
+
+      if (/^ {0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)) {
+        flushParagraph();
+        container.appendChild(document.createElement('hr'));
+        index += 1;
+        continue;
+      }
+
+      if (line.includes('|') && index + 1 < lines.length) {
+        const headers = splitTableRow(line);
+        const separators = splitTableRow(lines[index + 1]);
+        if (
+          headers.length > 1 &&
+          separators.length === headers.length &&
+          separators.every(cell => /^:?-{3,}:?$/.test(cell))
+        ) {
+          flushParagraph();
+          const table = document.createElement('table');
+          table.className = 'ai-chat-markdown-table';
+          const head = document.createElement('thead');
+          const headerRow = document.createElement('tr');
+          headers.forEach((value, cellIndex) => {
+            const cell = document.createElement('th');
+            cell.scope = 'col';
+            cell.style.textAlign = separators[cellIndex].startsWith(':')
+              ? (separators[cellIndex].endsWith(':') ? 'center' : 'left')
+              : (separators[cellIndex].endsWith(':') ? 'right' : 'left');
+            appendMarkdownInline(cell, value);
+            headerRow.appendChild(cell);
+          });
+          head.appendChild(headerRow);
+          table.appendChild(head);
+          const body = document.createElement('tbody');
+          index += 2;
+          while (index < lines.length && lines[index].includes('|') && lines[index].trim()) {
+            const values = splitTableRow(lines[index]);
+            const row = document.createElement('tr');
+            headers.forEach((_, cellIndex) => {
+              const cell = document.createElement('td');
+              cell.style.textAlign = separators[cellIndex].startsWith(':')
+                ? (separators[cellIndex].endsWith(':') ? 'center' : 'left')
+                : (separators[cellIndex].endsWith(':') ? 'right' : 'left');
+              appendMarkdownInline(cell, values[cellIndex] || '');
+              row.appendChild(cell);
+            });
+            body.appendChild(row);
+            index += 1;
+          }
+          table.appendChild(body);
+          container.appendChild(table);
+          continue;
+        }
+      }
+
+      if (quoteLine && depth < 4) {
+        flushParagraph();
+        const quoteLines = [];
+        while (index < lines.length) {
+          const currentQuote = lines[index].match(/^ {0,3}>\s?(.*)$/);
+          if (!currentQuote) break;
+          quoteLines.push(currentQuote[1]);
+          index += 1;
+        }
+        const quote = document.createElement('blockquote');
+        renderMarkdownBlocks(quote, quoteLines.join('\n'), depth + 1);
+        container.appendChild(quote);
+        continue;
+      }
+
+      if (listItem) {
+        flushParagraph();
+        const ordered = /^\d/.test(listItem[1]);
+        const list = document.createElement(ordered ? 'ol' : 'ul');
+        while (index < lines.length) {
+          const currentItem = lines[index].match(/^ {0,3}([-+*]|\d+[.)])\s+(.+)$/);
+          if (!currentItem || /^\d/.test(currentItem[1]) !== ordered) break;
+          const item = document.createElement('li');
+          appendMarkdownInline(item, currentItem[2]);
+          list.appendChild(item);
+          index += 1;
+        }
+        container.appendChild(list);
+        continue;
+      }
+
+      paragraphLines.push(line);
+      index += 1;
+    }
+
+    flushParagraph();
+  };
+
+  const renderAssistantContent = (message, text) => {
+    message.replaceChildren();
+    message.classList.add('ai-chat-markdown');
+    renderMarkdownBlocks(message, text);
+  };
+
+  const setAssistantMessage = (message, text, isPending = false) => {
+    message.classList.toggle('pending', isPending);
+    if (isPending) {
+      message.setAttribute('role', 'status');
+      message.setAttribute('aria-label', text);
+      message.replaceChildren();
+      const visualText = document.createElement('span');
+      visualText.className = 'ai-chat-pending-text';
+      visualText.setAttribute('aria-hidden', 'true');
+      Array.from(text).forEach((character, index) => {
+        const letter = document.createElement('span');
+        letter.className = 'ai-chat-bounce-char';
+        letter.style.setProperty('--char-index', String(index));
+        letter.textContent = character;
+        visualText.appendChild(letter);
+      });
+      message.appendChild(visualText);
+      return;
+    }
+    message.removeAttribute('role');
+    message.removeAttribute('aria-label');
+    renderAssistantContent(message, text);
+  };
+
+  const addMessage = (text, role, isPending = false, timestamp = Date.now()) => {
+    const messageTime = Number.isFinite(timestamp) ? timestamp : Date.now();
     const message = document.createElement('div');
     message.className = 'ai-chat-message ' + role;
+    const group = document.createElement('div');
+    group.className = 'ai-chat-message-group ' + role;
+    const time = document.createElement('time');
+    time.className = 'ai-chat-timestamp';
+    time.dateTime = new Date(messageTime).toISOString();
+    time.textContent = new Date(messageTime).toLocaleString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
     if (role === 'assistant') {
+      setAssistantMessage(message, text, isPending);
       const row = document.createElement('div');
       row.className = 'ai-chat-message-row assistant';
       const avatar = document.createElement('img');
       avatar.className = 'ai-chat-avatar';
-      avatar.src = '/dior.png';
+      avatar.src = 'dior.png';
       avatar.alt = 'Dior';
       row.appendChild(avatar);
-      message.textContent = text;
-      row.appendChild(message);
+      group.append(message, time);
+      row.appendChild(group);
       messages.appendChild(row);
     } else {
       message.textContent = text;
-      messages.appendChild(message);
+      group.append(message, time);
+      messages.appendChild(group);
     }
     messages.scrollTop = messages.scrollHeight;
     return message;
   };
 
+  const setMessageTimestamp = (message, timestamp) => {
+    const time = message.closest('.ai-chat-message-group').querySelector('.ai-chat-timestamp');
+    time.dateTime = new Date(timestamp).toISOString();
+    time.textContent = new Date(timestamp).toLocaleString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const dispatchSseBlock = (block, onEvent) => {
+    let eventName = 'message';
+    const data = [];
+    block.split(/\r?\n/).forEach(line => {
+      if (!line || line.startsWith(':')) return;
+      const separator = line.indexOf(':');
+      const field = separator < 0 ? line : line.slice(0, separator);
+      const value = separator < 0
+        ? ''
+        : line.slice(separator + 1).replace(/^ /, '');
+      if (field === 'event') eventName = value;
+      else if (field === 'data') data.push(value);
+    });
+    if (data.length) onEvent(eventName, data.join('\n'));
+  };
+
+  const readSseStream = async (response, onEvent) => {
+    if (!response.body) throw new Error('Không nhận được luồng phản hồi từ Agent AI.');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finished = false;
+
+    try {
+      while (!finished) {
+        const result = await reader.read();
+        finished = result.done;
+        buffer += decoder.decode(result.value || new Uint8Array(), { stream: !finished });
+        let separator;
+        while ((separator = buffer.match(/\r?\n\r?\n/))) {
+          const index = buffer.indexOf(separator[0]);
+          dispatchSseBlock(buffer.slice(0, index), onEvent);
+          buffer = buffer.slice(index + separator[0].length);
+        }
+      }
+    } catch (error) {
+      await reader.cancel().catch(cancelError => {
+        console.warn('Không thể đóng SSE reader sau khi nhận lỗi:', cancelError);
+      });
+      throw error;
+    }
+  };
+
+  const showWelcome = () => {
+    messages.replaceChildren();
+    if (welcomeTemplate) messages.appendChild(welcomeTemplate.cloneNode(true));
+  };
+
+  const loadHistory = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      if (!Array.isArray(saved)) throw new Error('Dữ liệu lịch sử không hợp lệ.');
+      conversations = saved.filter(conversation =>
+        conversation &&
+        typeof conversation.id === 'string' &&
+        typeof conversation.title === 'string' &&
+        typeof conversation.threadId === 'string' &&
+        typeof conversation.updatedAt === 'number' &&
+        Array.isArray(conversation.messages)
+      ).map(conversation => ({
+        ...conversation,
+        messages: conversation.messages.filter(message =>
+          message &&
+          (message.role === 'user' || message.role === 'assistant') &&
+          typeof message.text === 'string'
+        ).map(message => ({
+          ...message,
+          createdAt: Number.isFinite(message.createdAt)
+            ? message.createdAt
+            : conversation.updatedAt
+        }))
+      })).filter(conversation => conversation.messages.length);
+    } catch (error) {
+      console.error('Không thể tải lịch sử chat:', error);
+      toast('Không thể tải lịch sử chat đã lưu.');
+      conversations = [];
+    }
+  };
+
+  const saveHistory = () => {
+    try {
+      localStorage.setItem(historyKey, JSON.stringify(conversations.slice(0, 20)));
+    } catch (error) {
+      console.error('Không thể lưu lịch sử chat:', error);
+      if (!storageWarningShown) {
+        toast('Không thể lưu lịch sử chat trên trình duyệt.');
+        storageWarningShown = true;
+      }
+    }
+  };
+
+  const renderHistory = () => {
+    if (!historyMenu) return;
+    historyMenu.replaceChildren();
+    if (!conversations.length) {
+      const empty = document.createElement('div');
+      empty.className = 'ai-chat-history-empty';
+      empty.textContent = 'Chưa có hội thoại nào.';
+      historyMenu.appendChild(empty);
+      return;
+    }
+
+    conversations.forEach(conversation => {
+      const item = document.createElement('button');
+      item.className = 'ai-chat-history-item' +
+        (activeConversation && activeConversation.id === conversation.id ? ' active' : '');
+      item.type = 'button';
+      item.dataset.conversationId = conversation.id;
+      const title = document.createElement('span');
+      title.className = 'ai-chat-history-title';
+      title.textContent = conversation.title;
+      const date = document.createElement('span');
+      date.className = 'ai-chat-history-date';
+      date.textContent = new Date(conversation.updatedAt).toLocaleString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      item.append(title, date);
+      historyMenu.appendChild(item);
+    });
+  };
+
+  const showConversation = conversation => {
+    activeConversation = conversation;
+    messages.replaceChildren();
+    conversation.messages.forEach(message => {
+      const element = addMessage(message.text, message.role, false, message.createdAt);
+      if (message.error) element.classList.add('error');
+    });
+    renderHistory();
+    if (historyMenu) historyMenu.hidden = true;
+    if (historyButton) historyButton.setAttribute('aria-expanded', 'false');
+  };
+
+  const startNewChat = () => {
+    activeConversation = null;
+    selectedFiles = [];
+    renderSelectedFiles();
+    showWelcome();
+    renderHistory();
+    if (historyMenu) historyMenu.hidden = true;
+    if (historyButton) historyButton.setAttribute('aria-expanded', 'false');
+    input.focus();
+  };
+
+  const renderSelectedFiles = () => {
+    if (!attachmentsContainer) return;
+    attachmentsContainer.replaceChildren();
+    attachmentsContainer.hidden = selectedFiles.length === 0;
+    selectedFiles.forEach((file, index) => {
+      const chip = document.createElement('span');
+      chip.className = 'ai-chat-file-chip';
+      const name = document.createElement('span');
+      name.className = 'ai-chat-file-name';
+      name.textContent = file.name;
+      name.title = file.name;
+      const remove = document.createElement('button');
+      remove.className = 'ai-chat-file-remove';
+      remove.type = 'button';
+      remove.dataset.fileIndex = String(index);
+      remove.setAttribute('aria-label', 'Bỏ tệp ' + file.name);
+      remove.textContent = '×';
+      chip.append(name, remove);
+      attachmentsContainer.appendChild(chip);
+    });
+  };
+
+  loadHistory();
+  renderHistory();
+
   input.addEventListener('keydown', event => {
-    if (event.key !== 'Enter' || event.altKey || event.isComposing) return;
+    if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
     event.preventDefault();
     form.requestSubmit();
   });
+
+  if (attachButton && fileInput) {
+    attachButton.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      Array.from(fileInput.files || []).forEach(file => {
+        const alreadySelected = selectedFiles.some(selected =>
+          selected.name === file.name &&
+          selected.size === file.size &&
+          selected.lastModified === file.lastModified
+        );
+        if (!alreadySelected) selectedFiles.push(file);
+      });
+      fileInput.value = '';
+      renderSelectedFiles();
+      input.focus();
+    });
+  }
+
+  if (attachmentsContainer) {
+    attachmentsContainer.addEventListener('click', event => {
+      const removeButton = event.target.closest('[data-file-index]');
+      if (!removeButton) return;
+      selectedFiles.splice(Number(removeButton.dataset.fileIndex), 1);
+      renderSelectedFiles();
+    });
+  }
+
+  messages.addEventListener('click', event => {
+    if (event.target.closest('[data-seatalk-notice]') && seatalkDialog) {
+      seatalkDialog.showModal();
+      return;
+    }
+    const card = event.target.closest('[data-prompt]');
+    if (!card) return;
+    input.value = card.dataset.prompt;
+    input.focus();
+  });
+
+  if (seatalkDialog && seatalkDialogCancel) {
+    seatalkDialogCancel.addEventListener('click', () => seatalkDialog.close());
+  }
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
     const message = input.value.trim();
     if (!message || sendButton.disabled) return;
 
-    addMessage(message, 'user');
+    if (!activeConversation) {
+      activeConversation = {
+        id: window.crypto && window.crypto.randomUUID
+          ? window.crypto.randomUUID()
+          : Date.now().toString(36) + Math.random().toString(36).slice(2),
+        threadId: '',
+        title: message.slice(0, 56),
+        updatedAt: Date.now(),
+        messages: []
+      };
+      conversations.unshift(activeConversation);
+    }
+    const conversation = activeConversation;
+    const sentAt = Date.now();
+    conversation.messages.push({ role: 'user', text: message, createdAt: sentAt });
+    conversation.updatedAt = sentAt;
+    addMessage(message, 'user', false, sentAt);
     input.value = '';
     input.disabled = true;
     sendButton.disabled = true;
-    const pending = addMessage('Đang chờ AI trả lời…', 'assistant');
+    if (newChatButton) newChatButton.disabled = true;
+    if (historyButton) historyButton.disabled = true;
+    saveHistory();
+    renderHistory();
+    const pending = addMessage('Đang chờ AI trả lời…', 'assistant', true);
+    let streamedReply = '';
+    let streamComplete = false;
+    let interrupted = false;
+    let pendingNotice = null;
+    const waitNoticeTimer = window.setTimeout(() => {
+      if (streamComplete) return;
+      pendingNotice = document.createElement('button');
+      pendingNotice.type = 'button';
+      pendingNotice.className = 'ai-chat-seatalk-notice';
+      pendingNotice.dataset.seatalkNotice = 'true';
+      pendingNotice.textContent = 'Wait too long?.. Send file to Seatalk when complete';
+      pending.appendChild(pendingNotice);
+      messages.scrollTop = messages.scrollHeight;
+    }, 15000);
 
     try {
       const response = await fetch(apiUrl('/api/ai-chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, thread_id: threadId })
+        body: JSON.stringify({ message, thread_id: conversation.threadId })
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Không thể gửi tin nhắn.');
-      threadId = data.thread_id || threadId;
-      pending.textContent = data.reply || 'AI không trả về nội dung.';
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Không thể gửi tin nhắn.');
+      }
+
+      await readSseStream(response, (eventName, rawData) => {
+        let data;
+        try {
+          data = JSON.parse(rawData);
+        } catch (error) {
+          throw new Error('Agent AI gửi event SSE không hợp lệ.');
+        }
+        if (!data || typeof data !== 'object') {
+          throw new Error('Agent AI gửi dữ liệu SSE không hợp lệ.');
+        }
+
+        if (eventName === 'response.start') {
+          conversation.threadId = data.session_id || data.thread_id || conversation.threadId;
+        } else if (eventName === 'response.final_response.chunk') {
+          if (typeof data.content !== 'string') {
+            throw new Error('Agent AI gửi chunk phản hồi không hợp lệ.');
+          }
+          streamedReply += data.content;
+          pending.classList.add('pending');
+          pending.removeAttribute('role');
+          pending.removeAttribute('aria-label');
+          renderAssistantContent(pending, streamedReply);
+          if (pendingNotice) pending.appendChild(pendingNotice);
+          messages.scrollTop = messages.scrollHeight;
+        } else if (eventName === 'response.complete') {
+          streamComplete = true;
+        } else if (eventName === 'response.error') {
+          throw new Error(
+            data.error_message || data.error || data.message || 'Agent AI không thể xử lý yêu cầu.'
+          );
+        } else if (eventName === 'interrupt') {
+          const interruptMessage = data.interrupt_message || data.message || data.content;
+          if (typeof interruptMessage === 'string') streamedReply += interruptMessage;
+          else if (!streamedReply) streamedReply = 'Agent AI đang chờ thông tin bổ sung.';
+          interrupted = true;
+          streamComplete = true;
+          pending.classList.add('pending');
+          renderAssistantContent(pending, streamedReply);
+          if (pendingNotice) pending.appendChild(pendingNotice);
+        }
+      });
+
+      if (!streamComplete) {
+        throw new Error('Luồng phản hồi từ Agent AI kết thúc trước khi hoàn tất.');
+      }
+      if (!streamedReply) streamedReply = 'AI không trả về nội dung.';
+      if (pendingNotice) pendingNotice.remove();
+      const receivedAt = Date.now();
+      setAssistantMessage(pending, streamedReply);
+      setMessageTimestamp(pending, receivedAt);
+      conversation.messages.push({
+        role: 'assistant',
+        text: streamedReply,
+        createdAt: receivedAt,
+        ...(interrupted ? { interrupted: true } : {})
+      });
     } catch (error) {
       pending.classList.add('error');
-      pending.textContent = error.message || 'Không thể kết nối Agent AI.';
+      const errorMessage = [
+        streamedReply,
+        error.message || 'Không thể kết nối Agent AI.'
+      ].filter(Boolean).join('\n\n');
+      if (pendingNotice) pendingNotice.remove();
+      const receivedAt = Date.now();
+      setAssistantMessage(pending, errorMessage);
+      setMessageTimestamp(pending, receivedAt);
+      conversation.messages.push({
+        role: 'assistant',
+        text: errorMessage,
+        createdAt: receivedAt,
+        error: true
+      });
     } finally {
+      window.clearTimeout(waitNoticeTimer);
+      conversation.updatedAt = Date.now();
+      conversations.sort((first, second) => second.updatedAt - first.updatedAt);
+      conversations = conversations.slice(0, 20);
+      saveHistory();
+      renderHistory();
       input.disabled = false;
       sendButton.disabled = false;
+      if (newChatButton) newChatButton.disabled = false;
+      if (historyButton) historyButton.disabled = false;
       input.focus();
       messages.scrollTop = messages.scrollHeight;
     }
   });
 
   if (newChatButton) {
-    newChatButton.addEventListener('click', () => {
-      threadId = '';
-      messages.replaceChildren();
-      addMessage(welcomeMessage, 'assistant');
-      input.focus();
+    newChatButton.addEventListener('click', startNewChat);
+  }
+
+  if (historyButton && historyMenu) {
+    historyButton.addEventListener('click', () => {
+      const isOpen = historyMenu.hidden;
+      historyMenu.hidden = !isOpen;
+      historyButton.setAttribute('aria-expanded', String(isOpen));
     });
+    historyMenu.addEventListener('click', event => {
+      const item = event.target.closest('[data-conversation-id]');
+      if (!item) return;
+      const conversation = conversations.find(entry => entry.id === item.dataset.conversationId);
+      if (conversation) showConversation(conversation);
+    });
+    document.addEventListener('click', event => {
+      if (event.target.closest('.ai-chat-history-wrap')) return;
+      historyMenu.hidden = true;
+      historyButton.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  if (resizeHandle && panel) {
+    const minWidth = 340;
+    const getMaxWidth = () => Math.max(minWidth, window.innerWidth - panel.getBoundingClientRect().left - 24);
+    const updateResizeValue = () => {
+      resizeHandle.setAttribute('aria-valuemin', String(minWidth));
+      resizeHandle.setAttribute('aria-valuemax', String(Math.round(getMaxWidth())));
+      resizeHandle.setAttribute('aria-valuenow', String(Math.round(panel.getBoundingClientRect().width)));
+    };
+
+    resizeHandle.addEventListener('pointerdown', event => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = panel.getBoundingClientRect().width;
+      resizeHandle.setPointerCapture(event.pointerId);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      const resize = moveEvent => {
+        const width = Math.max(minWidth, Math.min(getMaxWidth(), startWidth + moveEvent.clientX - startX));
+        panel.style.width = width + 'px';
+        updateResizeValue();
+      };
+      const finish = () => {
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        resizeHandle.removeEventListener('pointermove', resize);
+        resizeHandle.removeEventListener('pointerup', finish);
+        resizeHandle.removeEventListener('pointercancel', finish);
+      };
+      resizeHandle.addEventListener('pointermove', resize);
+      resizeHandle.addEventListener('pointerup', finish);
+      resizeHandle.addEventListener('pointercancel', finish);
+    });
+
+    resizeHandle.addEventListener('keydown', event => {
+      const currentWidth = panel.getBoundingClientRect().width;
+      let nextWidth = currentWidth;
+      if (event.key === 'ArrowLeft') nextWidth -= 20;
+      else if (event.key === 'ArrowRight') nextWidth += 20;
+      else if (event.key === 'Home') nextWidth = minWidth;
+      else if (event.key === 'End') nextWidth = getMaxWidth();
+      else return;
+      event.preventDefault();
+      panel.style.width = Math.max(minWidth, Math.min(getMaxWidth(), nextWidth)) + 'px';
+      updateResizeValue();
+    });
+    window.addEventListener('resize', () => {
+      if (window.innerWidth <= 700) panel.style.width = '';
+      updateResizeValue();
+    });
+    updateResizeValue();
   }
 }
 

@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import requests
-from flask import Flask, jsonify, Response, request, send_file
+from flask import Flask, jsonify, Response, request, send_file, stream_with_context
 from google.auth.exceptions import GoogleAuthError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -231,43 +231,6 @@ def fetch_dashboard_data():
     return normalize_rows(payload.get("values", []))
 
 
-def _find_response_value(payload, keys):
-    if isinstance(payload, dict):
-        for key in keys:
-            value = payload.get(key)
-            if isinstance(value, (str, int, float)) and str(value).strip():
-                return str(value).strip()
-        for value in payload.values():
-            result = _find_response_value(value, keys)
-            if result:
-                return result
-    elif isinstance(payload, list):
-        for value in payload:
-            result = _find_response_value(value, keys)
-            if result:
-                return result
-    return None
-
-
-def extract_agent_reply(payload):
-    reply = _find_response_value(
-        payload,
-        (
-            "response_str",
-            "output_str",
-            "answer",
-            "reply",
-            "text",
-            "content",
-            "response",
-            "output",
-        ),
-    )
-    if reply:
-        return reply
-    return json.dumps(payload, ensure_ascii=False)
-
-
 def invoke_ai_agent(message, thread_id):
     if not AI_AGENT_ENDPOINT_KEY or not AI_AGENT_USER_ID:
         raise ValueError(
@@ -281,31 +244,65 @@ def invoke_ai_agent(message, thread_id):
         "user_id": AI_AGENT_USER_ID,
         "message": {"input_str": message, "thread_id": thread_id},
         "mode": "sync",
-        "streaming": False,
+        "streaming": True,
         "user_credentials": {"token_inputs": []},
         "tool_variables": {},
         "override_tool_variables": {},
         "auto_clean_up_session_files": False,
     }
 
+    response = None
     try:
-        response = requests.post(AI_AGENT_URL, json=payload, timeout=120)
+        response = requests.post(
+            AI_AGENT_URL,
+            json=payload,
+            timeout=600,
+            stream=True,
+            headers={"Accept": "text/event-stream"},
+        )
         response.raise_for_status()
-        result = response.json()
+        return response
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else "không rõ"
         details = exc.response.text[:500] if exc.response is not None else str(exc)
+        if exc.response is not None:
+            exc.response.close()
         app.logger.error("AI agent returned HTTP %s: %s", status, details)
         raise RuntimeError(f"Agent AI trả lỗi HTTP {status}.") from exc
-    except (requests.RequestException, ValueError) as exc:
-        app.logger.error("AI agent request failed: %s", exc)
+    except requests.RequestException as exc:
+        error_response = getattr(exc, "response", None) or response
+        status = error_response.status_code if error_response is not None else None
+        response_body = error_response.text if error_response is not None else None
+        body = response_body[:1000] if response_body is not None else None
+        if response_body is not None and len(response_body) > 1000:
+            body += "… (đã cắt bớt)"
+        app.logger.error(
+            "AI agent request failed (status_code=%s, response_body=%r): %s",
+            status if status is not None else "không có phản hồi HTTP",
+            body if body is not None else "không có response body",
+            exc,
+        )
+        if error_response is not None:
+            error_response.close()
         raise RuntimeError("Không thể kết nối hoặc đọc phản hồi từ Agent AI.") from exc
 
-    return {
-        "reply": extract_agent_reply(result),
-        "thread_id": _find_response_value(result, ("thread_id", "threadId"))
-        or thread_id,
-    }
+
+def relay_ai_agent_stream(upstream_response):
+    try:
+        upstream_response.encoding = upstream_response.encoding or "utf-8"
+        for line in upstream_response.iter_lines(decode_unicode=True):
+            if isinstance(line, bytes):
+                line = line.decode("utf-8", errors="replace")
+            yield f"{line}\n"
+    except requests.RequestException as exc:
+        app.logger.error("AI agent stream interrupted: %s", exc)
+        error_event = json.dumps(
+            {"error": "Kết nối đến Agent AI bị gián đoạn."},
+            ensure_ascii=False,
+        )
+        yield f"event: response.error\ndata: {error_event}\n\n"
+    finally:
+        upstream_response.close()
 
 
 @app.get("/")
@@ -316,6 +313,11 @@ def home():
 @app.get("/dior.png")
 def dior_avatar():
     return send_file(ROOT_DIR / "dior.png", mimetype="image/png")
+
+
+@app.get("/header_cover.png")
+def header_cover():
+    return send_file(ROOT_DIR / "header_cover.png", mimetype="image/png")
 
 
 @app.get("/health")
@@ -350,11 +352,20 @@ def ai_chat():
         return jsonify({"error": "thread_id không hợp lệ."}), 400
 
     try:
-        return jsonify(invoke_ai_agent(message.strip(), thread_id))
+        upstream_response = invoke_ai_agent(message.strip(), thread_id)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 503
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 502
+
+    return Response(
+        stream_with_context(relay_ai_agent_stream(upstream_response)),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 if __name__ == "__main__":

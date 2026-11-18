@@ -51,7 +51,7 @@ export default {
         });
       }
 
-      const assetPath = authResponse.ok ? "/index.html" : "/login-preview.html";
+      const assetPath = authResponse.ok ? "/" : "/login-preview";
       const assetUrl = new URL(assetPath, request.url);
       assetUrl.search = url.search;
       const assetResponse = await env.ASSETS.fetch(new Request(assetUrl, request));

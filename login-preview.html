@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f2ff">
+  <title>Đăng nhập | PN/AR Dashboard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      color: #14194e;
+      background: #f7f5ff;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      --blue: #0864f7;
+      --violet: #633bff;
+      --orange: #ff6a1b;
+      --ink: #14194e;
+      --muted: #59628f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      overflow-x: hidden;
+      background:
+        radial-gradient(ellipse at 68% 13%, rgba(201, 191, 255, .4), transparent 34%),
+        radial-gradient(ellipse at 84% 78%, rgba(255, 215, 198, .58), transparent 30%),
+        linear-gradient(120deg, #f8f6ff 3%, #f1efff 56%, #fff8f4 100%);
+    }
+
+    button, input { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+
+    .login-page {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(390px, .85fr);
+      align-items: center;
+      gap: clamp(24px, 5vw, 78px);
+      width: min(1440px, 100%);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 34px clamp(36px, 5.5vw, 86px) 76px;
+      isolation: isolate;
+    }
+
+    .login-page::before,
+    .login-page::after {
+      position: fixed;
+      z-index: -1;
+      content: "";
+      pointer-events: none;
+    }
+
+    .login-page::before {
+      top: -370px;
+      right: -120px;
+      width: 850px;
+      height: 850px;
+      border: 1px solid rgba(139, 125, 255, .15);
+      border-radius: 50%;
+      box-shadow: 0 0 0 72px rgba(139, 125, 255, .035), 0 0 0 144px rgba(139, 125, 255, .025);
+    }
+
+    .login-page::after {
+      right: -8vw;
+      bottom: -250px;
+      left: -9vw;
+      height: 420px;
+      transform: rotate(-8deg);
+      border-radius: 50% 45% 0 0;
+      background: linear-gradient(110deg, #8b5cff 0%, #c4b1ff 37%, #fff0e8 77%, #ffb389 100%);
+      opacity: .8;
+    }
+
+    .intro {
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 0;
+      padding: 4px 0 0;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      width: fit-content;
+      margin-bottom: clamp(34px, 5vh, 58px);
+      color: var(--blue);
+      font-size: 30px;
+      font-weight: 850;
+      letter-spacing: -1.6px;
+      line-height: 1;
+    }
+
+    .brand-symbol {
+      position: relative;
+      display: inline-grid;
+      width: 43px;
+      height: 43px;
+      place-items: center;
+      overflow: visible;
+      border-radius: 50%;
+      background: var(--blue);
+      box-shadow: inset 0 -3px 0 rgba(0, 40, 180, .1);
+    }
+
+    .brand-symbol::before {
+      width: 10px;
+      height: 10px;
+      content: "";
+      background: white;
+      border-radius: 1px;
+      transform: translateY(-2px);
+    }
+
+    .brand-symbol::after {
+      position: absolute;
+      right: -3px;
+      bottom: -6px;
+      left: -4px;
+      height: 12px;
+      content: "";
+      border-top: 4px solid #ff6b22;
+      border-bottom: 4px solid #ff6b22;
+      border-radius: 50%;
+      transform: rotate(4deg);
+    }
+
+    .brand-dot { color: #ff6b22; }
+
+    .product-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      width: fit-content;
+      margin-bottom: 17px;
+      padding: 8px 15px;
+      border: 1px solid rgba(120, 97, 255, .08);
+      border-radius: 30px;
+      background: rgba(224, 218, 255, .72);
+      color: #30336c;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .product-pill svg { color: var(--violet); }
+
+    h1 {
+      max-width: 700px;
+      margin: 0;
+      color: #10164c;
+      font-size: clamp(42px, 5.3vw, 70px);
+      font-weight: 830;
+      letter-spacing: -3.4px;
+      line-height: 1.04;
+    }
+
+    h1 span {
+      color: #5430f5;
+      background: linear-gradient(100deg, #6240ff, #4a2bdc);
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .intro h2 {
+      margin: 14px 0 10px;
+      color: #14194e;
+      font-size: clamp(19px, 2vw, 25px);
+      font-weight: 750;
+      letter-spacing: -.5px;
+    }
+
+    .intro-copy {
+      max-width: 480px;
+      margin: 0;
+      color: #343c70;
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    .benefits {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      max-width: 570px;
+      margin-top: 24px;
+    }
+
+    .benefit {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 0 10px;
+      color: #252b66;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.25;
+      text-align: center;
+    }
+
+    .benefit + .benefit { border-left: 1px solid rgba(112, 100, 220, .2); }
+
+    .benefit-icon {
+      display: grid;
+      width: 44px;
+      height: 44px;
+      place-items: center;
+      border-radius: 13px;
+      background: #e7e0ff;
+      color: #704bff;
+    }
+
+    .benefit:nth-child(2) .benefit-icon { background: #ffeadf; color: #ff732b; }
+    .benefit:nth-child(3) .benefit-icon { background: #d8f8ed; color: #10b887; }
+    .benefit:nth-child(4) .benefit-icon { background: #eee5ff; color: #8854e9; }
+
+    .artwork {
+      position: relative;
+      min-height: 256px;
+      max-width: 620px;
+      margin-top: clamp(24px, 5vh, 54px);
+    }
+
+    .dashboard-art {
+      position: absolute;
+      right: 2%;
+      bottom: 1px;
+      width: 69%;
+      height: 205px;
+      padding: 13px;
+      transform: rotate(-5deg);
+      border: 2px solid rgba(151, 137, 255, .56);
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(255,255,255,.97), rgba(247,245,255,.92));
+      box-shadow: 0 18px 34px rgba(73, 56, 167, .17);
+    }
+
+    .art-topline { width: 70px; height: 7px; margin: 0 0 11px 3px; border-radius: 9px; background: #d8d1ff; }
+    .metric-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .metric {
+      padding: 9px 7px 7px;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 3px 12px rgba(68, 51, 153, .07);
+    }
+    .metric b { display: block; color: #293064; font-size: 13px; }
+    .metric span { color: #13b98d; font-size: 9px; font-weight: 750; }
+    .chart-area {
+      position: relative;
+      height: 95px;
+      margin-top: 11px;
+      overflow: hidden;
+      border-radius: 9px;
+      background: repeating-linear-gradient(to bottom, transparent 0 22px, rgba(124, 112, 213, .1) 23px 24px);
+    }
+    .chart-area svg { width: 100%; height: 100%; overflow: visible; }
+    .chart-line { fill: none; stroke: #8d68ff; stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; }
+    .chart-line.orange { stroke: #ff9a65; stroke-width: 2.5; }
+
+    .robot {
+      position: absolute;
+      z-index: 1;
+      bottom: 0;
+      left: 3%;
+      width: 128px;
+      height: 166px;
+    }
+    .robot-head {
+      position: absolute;
+      top: 28px;
+      left: 20px;
+      display: grid;
+      width: 90px;
+      height: 82px;
+      place-items: center;
+      border: 5px solid #dedaff;
+      border-radius: 30px;
+      background: linear-gradient(145deg, #fff, #dce5ff);
+      box-shadow: 0 12px 25px rgba(64, 51, 156, .2);
+    }
+    .robot-face {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 19px;
+      width: 70px;
+      height: 62px;
+      border-radius: 22px;
+      background: #17285f;
+      box-shadow: inset 0 3px 8px rgba(0,0,0,.2);
+    }
+    .robot-face::before, .robot-face::after {
+      width: 12px;
+      height: 9px;
+      content: "";
+      border: 3px solid #fff;
+      border-bottom: 0;
+      border-radius: 12px 12px 0 0;
+    }
+    .robot-body {
+      position: absolute;
+      right: 14px;
+      bottom: 0;
+      left: 14px;
+      height: 53px;
+      border: 4px solid #e1ddff;
+      border-radius: 35px 35px 22px 22px;
+      background: linear-gradient(145deg, #fff, #e1e9ff);
+      box-shadow: 0 9px 18px rgba(64, 51, 156, .15);
+      color: #ff762e;
+      font-size: 24px;
+      font-weight: 900;
+      line-height: 43px;
+      text-align: center;
+    }
+    .robot-ear {
+      position: absolute;
+      z-index: 2;
+      top: 51px;
+      width: 17px;
+      height: 34px;
+      border: 4px solid #ff9b55;
+      border-radius: 12px;
+      background: #ffb467;
+    }
+    .robot-ear.left { left: 10px; }
+    .robot-ear.right { right: 9px; }
+    .art-spark {
+      position: absolute;
+      top: 9px;
+      right: 6%;
+      color: #8969ff;
+      font-size: 58px;
+      transform: rotate(15deg);
+    }
+    .art-bars {
+      position: absolute;
+      right: -1%;
+      bottom: 17px;
+      display: flex;
+      align-items: end;
+      gap: 9px;
+      height: 135px;
+      opacity: .45;
+    }
+    .art-bars i { width: 21px; border-radius: 6px 6px 0 0; background: #9985ff; }
+    .art-bars i:nth-child(1) { height: 48px; }
+    .art-bars i:nth-child(2) { height: 76px; }
+    .art-bars i:nth-child(3) { height: 111px; }
+
+    .auth-side {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-self: center;
+      width: min(100%, 450px);
+      padding-top: 28px;
+    }
+
+    .auth-card {
+      width: 100%;
+      padding: 30px clamp(26px, 3vw, 38px) 26px;
+      border: 1px solid rgba(255,255,255,.88);
+      border-radius: 21px;
+      background: rgba(255, 255, 255, .89);
+      box-shadow: 0 20px 60px rgba(51, 42, 127, .12), 0 2px 8px rgba(61, 52, 126, .035);
+      backdrop-filter: blur(16px);
+    }
+
+    .auth-brand {
+      display: flex;
+      justify-content: center;
+      margin: 0 auto 17px;
+      transform: scale(1.38);
+      transform-origin: center bottom;
+    }
+
+    .auth-card h2 {
+      margin: 18px 0 4px;
+      color: #11174d;
+      font-size: 25px;
+      font-weight: 780;
+      letter-spacing: -.65px;
+      text-align: center;
+    }
+
+    .auth-subtitle {
+      margin: 0 0 24px;
+      color: #535c89;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      height: 47px;
+      margin-bottom: 13px;
+      padding: 0 12px;
+      border: 1px solid #dedcf4;
+      border-radius: 11px;
+      background: #fff;
+      box-shadow: inset 0 1px 2px rgba(61, 54, 138, .025);
+      color: #838bb7;
+      transition: border-color .16s ease, box-shadow .16s ease;
+    }
+
+    .field:focus-within {
+      border-color: #8a71ff;
+      box-shadow: 0 0 0 3px rgba(113, 81, 255, .11);
+    }
+
+    .field svg { flex: none; }
+    .field input {
+      width: 100%;
+      min-width: 0;
+      height: 100%;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: #202752;
+      font-size: 14px;
+    }
+    .field input::placeholder { color: #8991ba; opacity: 1; }
+
+    .field-action {
+      display: grid;
+      flex: none;
+      width: 31px;
+      height: 34px;
+      place-items: center;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: #8189b3;
+      cursor: pointer;
+    }
+    .field-action:hover { background: #f3f1ff; color: #5e46d9; }
+
+    .form-options {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 2px 0 18px;
+      font-size: 12px;
+    }
+
+    .remember {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #202752;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .remember input {
+      width: 17px;
+      height: 17px;
+      margin: 0;
+      accent-color: #633bff;
+    }
+
+    .text-link {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #5734f5;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .text-link:hover { text-decoration: underline; }
+
+    .sign-in {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 49px;
+      border: 0;
+      border-radius: 11px;
+      background: linear-gradient(100deg, #ff7625, #ff611a);
+      box-shadow: 0 8px 17px rgba(255, 104, 35, .2);
+      color: white;
+      font-size: 15px;
+      font-weight: 750;
+      cursor: pointer;
+      transition: transform .16s ease, box-shadow .16s ease;
+    }
+    .sign-in:hover { transform: translateY(-1px); box-shadow: 0 11px 21px rgba(255, 104, 35, .28); }
+    .sign-in:active { transform: translateY(0); }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 13px 0 11px;
+      color: #858cb4;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .divider::before, .divider::after { height: 1px; flex: 1; content: ""; background: #e9e7f2; }
+
+    .provider-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 11px;
+      width: 100%;
+      height: 43px;
+      margin-top: 10px;
+      border: 1px solid #dedcf2;
+      border-radius: 10px;
+      background: #fff;
+      color: #252b5d;
+      font-size: 13px;
+      font-weight: 650;
+      cursor: pointer;
+      transition: border-color .16s ease, background .16s ease;
+    }
+    .provider-button:hover { border-color: #b6a8ff; background: #fcfbff; }
+    .google-button-container {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      min-height: 43px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .google-g { font-family: Arial, sans-serif; font-size: 21px; font-weight: 800; line-height: 1; }
+    #seatalk_login_app_info { display: none; }
+    #seatalk_login_button { display: flex; justify-content: center; width: 100%; min-height: 43px; margin-top: 10px; }
+
+    .demo-note {
+      display: none;
+      margin: 13px 0 0;
+      padding: 9px 10px;
+      border-radius: 8px;
+      background: #f1efff;
+      color: #514783;
+      font-size: 11px;
+      line-height: 1.4;
+      text-align: center;
+    }
+    .demo-note.visible { display: block; }
+
+    .help {
+      margin: 21px 0 0;
+      color: #22295b;
+      font-size: 12px;
+      text-align: center;
+    }
+    .help span { color: #7653ff; font-size: 16px; vertical-align: -1px; }
+    .help a { color: #3226a5; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; }
+
+    @media (min-width: 1100px) and (min-height: 850px) {
+      .login-page { padding-top: 44px; padding-bottom: 80px; }
+      .artwork { min-height: 285px; }
+      .dashboard-art { height: 225px; }
+      .chart-area { height: 106px; }
+    }
+
+    @media (max-width: 1000px) {
+      .login-page {
+        grid-template-columns: minmax(0, 1fr) minmax(350px, .88fr);
+        gap: 28px;
+        padding-right: 35px;
+        padding-left: 35px;
+      }
+      h1 { font-size: clamp(40px, 5vw, 54px); letter-spacing: -2.6px; }
+      .intro-copy { font-size: 14px; }
+      .benefit { padding-right: 6px; padding-left: 6px; font-size: 11px; }
+      .artwork { min-height: 220px; }
+      .dashboard-art { height: 175px; }
+      .robot { transform: scale(.85); transform-origin: left bottom; }
+    }
+
+    @media (max-width: 760px) {
+      body { background: linear-gradient(145deg, #f7f5ff, #fff8f4); }
+      .login-page {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        gap: 22px;
+        min-height: 100vh;
+        padding: 24px 20px 36px;
+      }
+      .login-page::before { top: -500px; right: -430px; }
+      .login-page::after { bottom: -310px; left: -20vw; height: 360px; }
+      .intro { align-self: auto; width: min(100%, 520px); padding: 0; }
+      .brand { margin-bottom: 24px; font-size: 26px; }
+      .brand-symbol { width: 38px; height: 38px; }
+      .product-pill { margin-bottom: 12px; font-size: 12px; }
+      h1 { max-width: 520px; font-size: clamp(38px, 9.4vw, 55px); letter-spacing: -2.3px; }
+      .intro h2 { margin-top: 9px; font-size: 19px; }
+      .intro-copy { max-width: 440px; font-size: 13px; }
+      .benefits { max-width: 480px; margin-top: 18px; }
+      .benefit { gap: 6px; font-size: 10px; }
+      .benefit-icon { width: 37px; height: 37px; border-radius: 11px; }
+      .benefit-icon svg { width: 21px; height: 21px; }
+      .artwork { display: none; }
+      .auth-side { width: min(100%, 450px); padding-top: 0; }
+      .auth-card { padding: 25px 24px 23px; }
+      .auth-brand { margin-bottom: 14px; transform: scale(1.18); }
+      .auth-card h2 { margin-top: 17px; font-size: 23px; }
+      .auth-subtitle { margin-bottom: 20px; font-size: 13px; }
+      .help { margin-top: 16px; }
+    }
+
+    @media (min-width: 761px) and (max-height: 800px) {
+      .login-page { padding-top: 24px; padding-bottom: 44px; }
+      .brand { margin-bottom: 25px; }
+      .artwork { min-height: 205px; margin-top: 25px; }
+      .dashboard-art { height: 175px; }
+      .chart-area { height: 78px; }
+    }
+
+    @media (min-width: 761px) and (max-height: 650px) {
+      .login-page { gap: 24px; padding-top: 18px; padding-bottom: 30px; }
+      .brand { margin-bottom: 20px; }
+      .product-pill { margin-bottom: 10px; }
+      h1 { font-size: clamp(38px, 4.7vw, 52px); }
+      .intro h2 { margin-top: 8px; margin-bottom: 7px; font-size: 19px; }
+      .intro-copy { font-size: 13px; }
+      .benefits { margin-top: 14px; }
+      .benefit-icon { width: 38px; height: 38px; }
+      .artwork { display: none; }
+      .auth-side { padding-top: 0; }
+      .auth-card { padding-top: 20px; padding-bottom: 18px; }
+      .auth-brand { margin-bottom: 10px; transform: scale(1.12); }
+      .auth-card h2 { margin-top: 14px; font-size: 22px; }
+      .auth-subtitle { margin-bottom: 17px; font-size: 13px; }
+      .field { height: 42px; margin-bottom: 10px; }
+      .form-options { margin-bottom: 14px; }
+      .sign-in { height: 44px; }
+      .divider { margin-top: 9px; margin-bottom: 8px; }
+      .provider-button { height: 39px; margin-top: 8px; }
+      .help { margin-top: 12px; }
+    }
+
+    @media (max-width: 390px) {
+      .login-page { padding-right: 15px; padding-left: 15px; }
+      .benefit { padding-right: 3px; padding-left: 3px; font-size: 9px; }
+      .auth-card { padding-right: 19px; padding-left: 19px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+    }
+
+    body {
+      background: #f7f5ff url("login_background.png") center / cover no-repeat fixed;
+    }
+
+    .login-page {
+      display: flex;
+      justify-content: flex-end;
+      width: 100%;
+      max-width: none;
+      padding: 32px clamp(28px, 5vw, 76px);
+    }
+
+    .login-page::before,
+    .login-page::after,
+    .intro {
+      display: none;
+    }
+
+    .auth-side {
+      width: min(100%, 440px);
+      margin-right: clamp(0px, 1.5vw, 24px);
+      padding-top: 0;
+    }
+
+    .auth-card {
+      background: rgba(255, 255, 255, .92);
+      box-shadow: 0 20px 60px rgba(51, 42, 127, .14), 0 2px 8px rgba(61, 52, 126, .05);
+    }
+
+    @media (max-width: 760px) {
+      body {
+        background-position: right center;
+        background-size: auto 100vh;
+        background-attachment: scroll;
+      }
+
+      .login-page {
+        justify-content: center;
+        padding: 24px 20px 36px;
+      }
+
+      .auth-side { margin-right: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="login-page">
+    <section class="intro" aria-label="Giới thiệu PN/AR Dashboard">
+      <div class="brand" aria-label="monee">
+        <span class="brand-symbol" aria-hidden="true"></span>
+        <span>monee<span class="brand-dot">.</span></span>
+      </div>
+
+      <div class="product-pill">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        PN/AR Analytics
+      </div>
+
+      <h1>PN/AR <span>Dashboard</span></h1>
+      <h2>Turn data into better decisions.</h2>
+      <p class="intro-copy">Track performance, uncover insights,<br class="desktop-break"> and optimize your PN/AR strategy with AI.</p>
+
+      <div class="benefits" aria-label="Tính năng nổi bật">
+        <div class="benefit">
+          <span class="benefit-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 13h5v8H3zm7-6h5v14h-5zm7-5h5v19h-5z"/></svg>
+          </span>
+          <span>Track<br>Performance</span>
+        </div>
+        <div class="benefit">
+          <span class="benefit-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="7" stroke="currentColor" stroke-width="3"/><path d="m16 16 5 5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+          </span>
+          <span>Detect<br>Issues</span>
+        </div>
+        <div class="benefit">
+          <span class="benefit-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18h6m-5 3h4m-2-20a7 7 0 0 0-4 12.74c.63.43 1 1.03 1 1.76h6c0-.73.37-1.33 1-1.76A7 7 0 0 0 12 1Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 4v2m-5 1 1.5 1m8-1L15 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </span>
+          <span>Get Insights</span>
+        </div>
+        <div class="benefit">
+          <span class="benefit-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Zm7 13 .9 3.1L23 19l-3.1.9L19 23l-.9-3.1L15 19l3.1-.9L19 15ZM5 1l.8 2.2L8 4l-2.2.8L5 7l-.8-2.2L2 4l2.2-.8L5 1Z"/></svg>
+          </span>
+          <span>Optimize<br>Strategy</span>
+        </div>
+      </div>
+
+      <div class="artwork" aria-hidden="true">
+        <div class="art-spark">↗</div>
+        <div class="art-bars"><i></i><i></i><i></i></div>
+        <div class="robot">
+          <span class="robot-ear left"></span><span class="robot-ear right"></span>
+          <div class="robot-head"><div class="robot-face"></div></div>
+          <div class="robot-body">m.</div>
+        </div>
+        <div class="dashboard-art">
+          <div class="art-topline"></div>
+          <div class="metric-row">
+            <div class="metric"><b>12.3M</b><span>▲ +12.5%</span></div>
+            <div class="metric"><b>1.2M</b><span>▲ +8.4%</span></div>
+            <div class="metric"><b>9.8%</b><span>▲ +0.3%</span></div>
+          </div>
+          <div class="chart-area">
+            <svg viewBox="0 0 380 100" preserveAspectRatio="none">
+              <polyline class="chart-line" points="0,81 50,59 89,69 130,37 178,49 224,24 275,36 328,13 380,3"/>
+              <polyline class="chart-line orange" points="0,91 45,77 90,83 140,63 187,70 235,47 283,59 330,36 380,42"/>
+              <g fill="#8d68ff"><circle cx="50" cy="59" r="3"/><circle cx="130" cy="37" r="3"/><circle cx="224" cy="24" r="3"/><circle cx="328" cy="13" r="3"/></g>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="auth-side" aria-label="Đăng nhập">
+      <div class="auth-card">
+        <div class="brand auth-brand" aria-label="monee">
+          <span class="brand-symbol" aria-hidden="true"></span>
+          <span>monee<span class="brand-dot">.</span></span>
+        </div>
+        <h2>Welcome back!</h2>
+        <p class="auth-subtitle">Sign in to access PN/AR Dashboard</p>
+
+        <form id="preview-form">
+          <label class="field">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20v-1a7 7 0 0 1 7-7h2a7 7 0 0 1 7 7v1H4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            <input type="email" name="email" placeholder="Email address" autocomplete="username" aria-label="Email address">
+          </label>
+
+          <label class="field">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 10V7a4 4 0 1 1 8 0v3m-4 4v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <input id="password" type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password">
+            <button class="field-action" id="toggle-password" type="button" aria-label="Show password" title="Show password">
+              <svg id="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5.4 0 9 7 9 7a15 15 0 0 1-3.3 4.1M6.2 6.2C3.9 7.8 3 12 3 12s3.6 7 9 7c1 0 1.9-.2 2.7-.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </label>
+
+          <div class="form-options">
+            <label class="remember"><input type="checkbox" name="remember"> <span>Remember me</span></label>
+            <button class="text-link" type="button" data-demo-message>Forgot password?</button>
+          </div>
+
+          <button class="sign-in" type="submit">Sign In</button>
+          <div class="divider">or</div>
+          <div class="google-button-container" id="google-button-container"></div>
+          <div
+            id="seatalk_login_app_info"
+            data-redirect_uri="https://pn-ar-dashboard.quoctoan-tran02.workers.dev/"
+            data-appid="Nzk2MjY4MzcwMDIz"
+            data-response_type="code"
+            data-state=""
+          ></div>
+          <div
+            id="seatalk_login_button"
+            data-size="small"
+            data-logo_size="22"
+            data-copywriting="Continue with SeaTalk"
+            data-theme="light"
+            data-align="center"
+          ></div>
+          <p class="demo-note" id="demo-note" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+      <p class="help"><span aria-hidden="true">ⓘ</span>&nbsp; Need help? Contact <a href="mailto:quoctoan.tran02">quoctoan.tran02</a></p>
+    </section>
+  </main>
+  <script src="/config.js"></script>
+  <script>
+    const note = document.getElementById('demo-note');
+    const password = document.getElementById('password');
+    const togglePassword = document.getElementById('toggle-password');
+
+    document.getElementById('preview-form').addEventListener('submit', event => {
+      event.preventDefault();
+    });
+
+    togglePassword.addEventListener('click', () => {
+      const showing = password.type === 'password';
+      password.type = showing ? 'text' : 'password';
+      togglePassword.setAttribute('aria-label', showing ? 'Hide password' : 'Show password');
+      togglePassword.title = showing ? 'Hide password' : 'Show password';
+    });
+
+    function showLoginMessage(message) {
+      note.textContent = message;
+      note.classList.add('visible');
+    }
+
+    async function initializeSeatalkLogin() {
+      const params = new URLSearchParams(window.location.search);
+      const callbackError = params.get('seatalk_error');
+      if (callbackError) {
+        window.history.replaceState(null, '', window.location.pathname);
+        if (callbackError === 'denied') {
+          showLoginMessage('Đăng nhập SeaTalk đã bị hủy hoặc không được cấp quyền.');
+        } else if (callbackError === 'state') {
+          showLoginMessage('Không thể xác minh trạng thái đăng nhập SeaTalk. Vui lòng thử lại.');
+        } else {
+          showLoginMessage('Không thể hoàn tất đăng nhập SeaTalk. Vui lòng thử lại.');
+        }
+        return false;
+      }
+
+      if (params.has('code') || params.has('state') || params.has('error')) {
+        showLoginMessage('Không thể hoàn tất đăng nhập SeaTalk. Vui lòng thử lại.');
+        return false;
+      }
+
+      const appInfo = document.getElementById('seatalk_login_app_info');
+      appInfo.dataset.appid = window.PNAR_SEATALK_APP_ID || '';
+      appInfo.dataset.redirect_uri = window.PNAR_SEATALK_REDIRECT_URI || '';
+
+      try {
+        const apiBase = (window.PNAR_API_BASE_URL || '').replace(/\/+$/, '');
+        const response = await fetch(apiBase + '/api/auth/seatalk/start', {
+          method: 'POST',
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Không thể khởi tạo đăng nhập SeaTalk.');
+        if (typeof data.state !== 'string' || !data.state) {
+          throw new Error('Máy chủ trả về trạng thái đăng nhập SeaTalk không hợp lệ.');
+        }
+        appInfo.dataset.state = data.state;
+        return true;
+      } catch (error) {
+        showLoginMessage(error.message || 'Không thể kết nối đến máy chủ đăng nhập SeaTalk.');
+        return false;
+      }
+    }
+
+    function initializeGoogleLogin() {
+      const container = document.getElementById('google-button-container');
+      if (!window.PNAR_GOOGLE_CLIENT_ID) {
+        showLoginMessage('Google Login chưa được cấu hình. Hãy đặt GOOGLE_OAUTH_WEB_CLIENT_ID trên server.');
+        return;
+      }
+
+      google.accounts.id.initialize({
+        client_id: window.PNAR_GOOGLE_CLIENT_ID,
+        callback: async response => {
+          try {
+            const apiBase = (window.PNAR_API_BASE_URL || '').replace(/\/+$/, '');
+            const result = await fetch(apiBase + '/api/auth/google', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ credential: response.credential })
+            });
+            const data = await result.json();
+            if (!result.ok) throw new Error(data.error || 'Không thể đăng nhập bằng Google.');
+            window.location.replace('/');
+          } catch (error) {
+            showLoginMessage(error.message || 'Không thể kết nối đến máy chủ đăng nhập.');
+          }
+        }
+      });
+      google.accounts.id.renderButton(container, {
+        theme: 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'rectangular',
+        logo_alignment: 'left',
+        locale: 'en',
+        width: Math.floor(container.getBoundingClientRect().width)
+      });
+    }
+
+    initializeSeatalkLogin().then(shouldLoad => {
+      if (!shouldLoad) return;
+      const seatalkScript = document.createElement('script');
+      seatalkScript.src = 'https://static.cdn.haiserve.com/seatalk/client/shared/sop/auth.js';
+      seatalkScript.onerror = () => showLoginMessage(
+        'Không thể tải dịch vụ đăng nhập SeaTalk. Hãy thử tải lại trang.'
+      );
+      document.body.appendChild(seatalkScript);
+    });
+  </script>
+  <script src="https://accounts.google.com/gsi/client?hl=en" async defer onload="initializeGoogleLogin()" onerror="showLoginMessage('Không thể tải dịch vụ đăng nhập Google. Hãy thử tải lại trang.')"></script>
+</body>
+</html>

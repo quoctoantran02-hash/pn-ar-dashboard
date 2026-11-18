@@ -15,7 +15,21 @@ PARTIALS = {
 }
 
 
-def build(output_dir: Path, backend_url: str) -> None:
+def build(
+    output_dir: Path,
+    backend_url: str,
+    google_client_id: str,
+    seatalk_app_id: str = "",
+    seatalk_redirect_uri: str = "",
+) -> None:
+    seatalk_app_id = seatalk_app_id or os.environ.get(
+        "SEATALK_APP_ID", "Nzk2MjY4MzcwMDIz"
+    )
+    seatalk_redirect_uri = seatalk_redirect_uri or os.environ.get(
+        "SEATALK_REDIRECT_URI",
+        f"http://127.0.0.1:{os.environ.get('LOCAL_AI_PORT', '8765')}/",
+    )
+
     html = (ROOT_DIR / "index.html").read_text(encoding="utf-8")
     if '<script src="config.js"></script>' not in html:
         html = html.replace(
@@ -34,9 +48,14 @@ def build(output_dir: Path, backend_url: str) -> None:
     (output_dir / "index.html").write_text(html, encoding="utf-8")
 
     (output_dir / "config.js").write_text(
-        f"window.PNAR_API_BASE_URL = {json.dumps(backend_url.rstrip('/'))};\n",
+        f"window.PNAR_API_BASE_URL = {json.dumps(backend_url.rstrip('/'))};\n"
+        f"window.PNAR_GOOGLE_CLIENT_ID = {json.dumps(google_client_id)};\n"
+        f"window.PNAR_SEATALK_APP_ID = {json.dumps(seatalk_app_id)};\n"
+        f"window.PNAR_SEATALK_REDIRECT_URI = {json.dumps(seatalk_redirect_uri)};\n",
         encoding="utf-8",
     )
+    shutil.copy2(ROOT_DIR / "login-preview.html", output_dir / "login-preview.html")
+    shutil.copy2(ROOT_DIR / "login_background.png", output_dir / "login_background.png")
     shutil.copy2(ROOT_DIR / "dior.png", output_dir / "dior.png")
     shutil.copy2(ROOT_DIR / "header_cover.png", output_dir / "header_cover.png")
     shutil.copy2(ROOT_DIR / "_headers", output_dir / "_headers")
@@ -47,12 +66,36 @@ def main() -> None:
     parser.add_argument("--output", default="dist")
     parser.add_argument(
         "--backend-url",
-        default="",
+        default=os.environ.get("FRONTEND_BACKEND_URL", ""),
         help="Public HTTPS URL of the dashboard backend.",
+    )
+    parser.add_argument(
+        "--google-client-id",
+        default=os.environ.get("GOOGLE_OAUTH_WEB_CLIENT_ID", ""),
+        help="Google OAuth Web client ID.",
+    )
+    parser.add_argument(
+        "--seatalk-app-id",
+        default=os.environ.get("SEATALK_APP_ID", "Nzk2MjY4MzcwMDIz"),
+        help="SeaTalk Open Platform App ID.",
+    )
+    parser.add_argument(
+        "--seatalk-redirect-uri",
+        default=os.environ.get(
+            "SEATALK_REDIRECT_URI",
+            f"http://127.0.0.1:{os.environ.get('LOCAL_AI_PORT', '8765')}/",
+        ),
+        help="Exact SeaTalk callback URI registered for the app.",
     )
     args = parser.parse_args()
     output_dir = ROOT_DIR / args.output
-    build(output_dir, args.backend_url)
+    build(
+        output_dir,
+        args.backend_url,
+        args.google_client_id,
+        args.seatalk_app_id,
+        args.seatalk_redirect_uri,
+    )
     print(f"Static frontend built at {output_dir}")
 
 

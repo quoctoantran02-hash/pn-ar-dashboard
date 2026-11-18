@@ -101,8 +101,12 @@ function loadData(isRefresh){
   }
 
   // 2. Nếu bấm Làm mới hoặc chưa có Cache -> gọi API local
-  fetch(apiUrl('/api/dashboard-data'), { cache: 'no-store' })
+  fetch(apiUrl('/api/dashboard-data'), { cache: 'no-store', credentials: 'include' })
     .then(function(response){
+      if(response.status === 401){
+        window.location.replace('/');
+        throw new Error('Phiên đăng nhập đã hết hạn.');
+      }
       return response.json().then(function(data){
         if(!response.ok) throw new Error(data.error || 'Không thể tải dữ liệu');
         return data;
@@ -404,18 +408,53 @@ function wireAIChat(){
   const historyButton = document.getElementById('aiChatHistoryBtn');
   const historyMenu = document.getElementById('aiChatHistory');
   const seatalkDialog = document.getElementById('aiChatSeatalkDialog');
+  const seatalkDialogConfirm = document.getElementById('aiChatSeatalkDialogConfirm');
   const seatalkDialogCancel = document.getElementById('aiChatSeatalkDialogCancel');
   const resizeHandle = document.getElementById('aiChatResizeHandle');
   const panel = document.getElementById('aiInsightPanel');
   if (!form || !input || !sendButton || !messages) return;
 
-  const historyKey = 'PNAR_AI_CHAT_HISTORY_V1';
+  const historyKey = 'PNAR_AI_CHAT_HISTORY_V1_' +
+    encodeURIComponent(window.PNAR_CURRENT_USER.email);
+  const historyTtlMs = 24 * 60 * 60 * 1000;
   const welcomeScreen = messages.querySelector('.ai-welcome');
   const welcomeTemplate = welcomeScreen ? welcomeScreen.cloneNode(true) : null;
   let activeConversation = null;
   let storageWarningShown = false;
   let conversations = [];
   let selectedFiles = [];
+  let pendingSeatalkDelivery = null;
+
+  const sendSeatalkReply = async delivery => {
+    if (delivery.sending || delivery.sent || !delivery.reply) return;
+    delivery.sending = true;
+    try {
+      const response = await fetch(apiUrl('/api/seatalk/send-ai-reply'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reply: delivery.reply })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        window.location.replace('/');
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(result.error || 'Không thể gửi câu trả lời qua SeaTalk.');
+      }
+      delivery.sent = true;
+      toast(result.warning || (result.file_sent
+        ? 'Đã gửi câu trả lời và file tới SeaTalk.'
+        : 'Đã gửi câu trả lời tới SeaTalk.'));
+    } catch (error) {
+      console.error('Không thể gửi câu trả lời AI tới SeaTalk:', error);
+      toast(error.message || 'Không thể gửi câu trả lời qua SeaTalk.');
+    } finally {
+      delivery.sending = false;
+      if (pendingSeatalkDelivery === delivery) pendingSeatalkDelivery = null;
+    }
+  };
 
   const appendMarkdownInline = (container, text) => {
     const tokenPattern = /`([^`\n]+)`|\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)|(\*\*|__)(.+?)\4|(\*|_)(.+?)\6|~~(.+?)~~/g;
@@ -628,10 +667,38 @@ function wireAIChat(){
     flushParagraph();
   };
 
-  const renderAssistantContent = (message, text) => {
+  const renderAssistantContent = (message, text, showHtmlOutput = false) => {
     message.replaceChildren();
     message.classList.add('ai-chat-markdown');
-    renderMarkdownBlocks(message, text);
+    const hasHtmlOutput = text.includes('analysis_output_html.html');
+    const displayText = hasHtmlOutput
+      ? text
+        .replace(
+          /\[([^\]]+)\]\(https:\/\/docs\.google\.com\/document\/d\/1Sn5pBv10g-xVSIaWpQzNZ6uyUfTxRhQhMUh2mqeIevM\/[^)\s]*\)/g,
+          '$1'
+        )
+        .replace(
+          /https:\/\/docs\.google\.com\/document\/d\/1Sn5pBv10g-xVSIaWpQzNZ6uyUfTxRhQhMUh2mqeIevM\/[^\s)]+/g,
+          ''
+        )
+      : text;
+    renderMarkdownBlocks(message, displayText);
+    if (hasHtmlOutput && showHtmlOutput) {
+      const link = document.createElement('a');
+      link.className = 'ai-chat-output-file-link';
+      link.href = apiUrl('/api/ai-chat/html-output');
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.setAttribute('aria-label', 'Mở tệp HTML analysis_output_html.html trong tab mới');
+      const badge = document.createElement('span');
+      badge.className = 'ai-chat-output-file-badge';
+      badge.textContent = 'HTML';
+      const name = document.createElement('span');
+      name.className = 'ai-chat-output-file-name';
+      name.textContent = 'analysis_output_html.html';
+      link.append(badge, name);
+      message.appendChild(link);
+    }
   };
 
   const setAssistantMessage = (message, text, isPending = false) => {
@@ -655,10 +722,16 @@ function wireAIChat(){
     }
     message.removeAttribute('role');
     message.removeAttribute('aria-label');
-    renderAssistantContent(message, text);
+    renderAssistantContent(message, text, true);
   };
 
-  const addMessage = (text, role, isPending = false, timestamp = Date.now()) => {
+  const addMessage = (
+    text,
+    role,
+    isPending = false,
+    timestamp = Date.now(),
+    attachments = []
+  ) => {
     const messageTime = Number.isFinite(timestamp) ? timestamp : Date.now();
     const message = document.createElement('div');
     message.className = 'ai-chat-message ' + role;
@@ -688,11 +761,43 @@ function wireAIChat(){
       messages.appendChild(row);
     } else {
       message.textContent = text;
+      if (attachments.length) {
+        const attachmentList = document.createElement('div');
+        attachmentList.className = 'ai-chat-message-attachments';
+        attachments.forEach(attachment => {
+          const chip = document.createElement('span');
+          chip.className = 'ai-chat-message-attachment';
+          chip.textContent = attachment.name;
+          chip.title = attachment.name;
+          attachmentList.appendChild(chip);
+        });
+        const status = document.createElement('span');
+        status.className = 'ai-chat-attachment-status';
+        status.dataset.status = attachments[0].status || 'sent';
+        status.textContent = status.dataset.status === 'sending'
+          ? 'Đang gửi tệp…'
+          : status.dataset.status === 'failed'
+            ? 'Chưa gửi được'
+            : 'Đã gửi tới AI';
+        attachmentList.appendChild(status);
+        message.appendChild(attachmentList);
+      }
       group.append(message, time);
       messages.appendChild(group);
     }
     messages.scrollTop = messages.scrollHeight;
     return message;
+  };
+
+  const setAttachmentStatus = (message, status) => {
+    const label = message.querySelector('.ai-chat-attachment-status');
+    if (!label) return;
+    label.dataset.status = status;
+    label.textContent = status === 'sending'
+      ? 'Đang gửi tệp…'
+      : status === 'failed'
+        ? 'Chưa gửi được'
+        : 'Đã gửi tới AI';
   };
 
   const setMessageTimestamp = (message, timestamp) => {
@@ -757,14 +862,34 @@ function wireAIChat(){
 
   const loadHistory = () => {
     try {
-      const saved = JSON.parse(localStorage.getItem(historyKey) || '[]');
-      if (!Array.isArray(saved)) throw new Error('Dữ liệu lịch sử không hợp lệ.');
+      const cached = JSON.parse(localStorage.getItem(historyKey) || 'null');
+      let saved = [];
+      if (Array.isArray(cached)) {
+        saved = cached;
+      } else if (cached !== null) {
+        if (
+          !cached ||
+          !Array.isArray(cached.conversations) ||
+          !Number.isFinite(cached.savedAt)
+        ) {
+          throw new Error('Dữ liệu lịch sử không hợp lệ.');
+        }
+        if (Date.now() - cached.savedAt < historyTtlMs) {
+          saved = cached.conversations;
+        } else {
+          localStorage.removeItem(historyKey);
+        }
+      }
+      if (!Array.isArray(saved)) {
+        throw new Error('Dữ liệu lịch sử không hợp lệ.');
+      }
       conversations = saved.filter(conversation =>
         conversation &&
         typeof conversation.id === 'string' &&
         typeof conversation.title === 'string' &&
         typeof conversation.threadId === 'string' &&
         typeof conversation.updatedAt === 'number' &&
+        Date.now() - conversation.updatedAt < historyTtlMs &&
         Array.isArray(conversation.messages)
       ).map(conversation => ({
         ...conversation,
@@ -774,6 +899,16 @@ function wireAIChat(){
           typeof message.text === 'string'
         ).map(message => ({
           ...message,
+          attachments: Array.isArray(message.attachments)
+            ? message.attachments.filter(attachment =>
+              attachment && typeof attachment.name === 'string'
+            ).map(attachment => ({
+              ...attachment,
+              status: ['sending', 'sent', 'failed'].includes(attachment.status)
+                ? attachment.status
+                : 'sent'
+            }))
+            : [],
           createdAt: Number.isFinite(message.createdAt)
             ? message.createdAt
             : conversation.updatedAt
@@ -788,7 +923,10 @@ function wireAIChat(){
 
   const saveHistory = () => {
     try {
-      localStorage.setItem(historyKey, JSON.stringify(conversations.slice(0, 20)));
+      localStorage.setItem(historyKey, JSON.stringify({
+        savedAt: Date.now(),
+        conversations: conversations.slice(0, 20)
+      }));
     } catch (error) {
       console.error('Không thể lưu lịch sử chat:', error);
       if (!storageWarningShown) {
@@ -835,7 +973,13 @@ function wireAIChat(){
     activeConversation = conversation;
     messages.replaceChildren();
     conversation.messages.forEach(message => {
-      const element = addMessage(message.text, message.role, false, message.createdAt);
+      const element = addMessage(
+        message.text,
+        message.role,
+        false,
+        message.createdAt,
+        message.attachments
+      );
       if (message.error) element.classList.add('error');
     });
     renderHistory();
@@ -922,8 +1066,21 @@ function wireAIChat(){
     input.focus();
   });
 
+  if (seatalkDialog && seatalkDialogConfirm) {
+    seatalkDialogConfirm.addEventListener('click', () => {
+      const delivery = pendingSeatalkDelivery;
+      seatalkDialog.close();
+      if (!delivery) return;
+      delivery.requested = true;
+      if (delivery.complete) void sendSeatalkReply(delivery);
+    });
+  }
+
   if (seatalkDialog && seatalkDialogCancel) {
-    seatalkDialogCancel.addEventListener('click', () => seatalkDialog.close());
+    seatalkDialogCancel.addEventListener('click', () => {
+      pendingSeatalkDelivery = null;
+      seatalkDialog.close();
+    });
   }
 
   form.addEventListener('submit', async event => {
@@ -945,9 +1102,27 @@ function wireAIChat(){
     }
     const conversation = activeConversation;
     const sentAt = Date.now();
-    conversation.messages.push({ role: 'user', text: message, createdAt: sentAt });
+    if (conversation.messages.length === 0) {
+      messages.querySelector('.ai-welcome')?.remove();
+    }
+    const filesToSend = selectedFiles.slice();
+    const fileAttachments = filesToSend.map(file => ({
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      status: 'sending'
+    }));
+    const userMessage = {
+      role: 'user',
+      text: message,
+      createdAt: sentAt,
+      attachments: fileAttachments
+    };
+    conversation.messages.push(userMessage);
     conversation.updatedAt = sentAt;
-    addMessage(message, 'user', false, sentAt);
+    const userMessageElement = addMessage(message, 'user', false, sentAt, fileAttachments);
+    selectedFiles = selectedFiles.filter(file => !filesToSend.includes(file));
+    renderSelectedFiles();
     input.value = '';
     input.disabled = true;
     sendButton.disabled = true;
@@ -960,8 +1135,16 @@ function wireAIChat(){
     let streamComplete = false;
     let interrupted = false;
     let pendingNotice = null;
+    const seatalkDelivery = {
+      requested: false,
+      complete: false,
+      reply: '',
+      sending: false,
+      sent: false
+    };
     const waitNoticeTimer = window.setTimeout(() => {
       if (streamComplete) return;
+      pendingSeatalkDelivery = seatalkDelivery;
       pendingNotice = document.createElement('button');
       pendingNotice.type = 'button';
       pendingNotice.className = 'ai-chat-seatalk-notice';
@@ -972,57 +1155,85 @@ function wireAIChat(){
     }, 15000);
 
     try {
+      let requestBody;
+      const requestHeaders = {};
+      if (filesToSend.length) {
+        requestBody = new FormData();
+        requestBody.append('message', message);
+        requestBody.append('thread_id', conversation.threadId);
+        filesToSend.forEach(file => requestBody.append('files', file, file.name));
+      } else {
+        requestHeaders['Content-Type'] = 'application/json';
+        requestBody = JSON.stringify({ message, thread_id: conversation.threadId });
+      }
+
       const response = await fetch(apiUrl('/api/ai-chat'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, thread_id: conversation.threadId })
+        headers: requestHeaders,
+        body: requestBody,
+        credentials: 'include'
       });
+      if (response.status === 401) {
+        window.location.replace('/');
+        return;
+      }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || 'Không thể gửi tin nhắn.');
       }
 
-      await readSseStream(response, (eventName, rawData) => {
-        let data;
-        try {
-          data = JSON.parse(rawData);
-        } catch (error) {
-          throw new Error('Agent AI gửi event SSE không hợp lệ.');
+      if ((response.headers.get('content-type') || '').includes('application/json')) {
+        const result = await response.json();
+        if (!result || typeof result.reply !== 'string') {
+          throw new Error('Agent AI trả về phản hồi không hợp lệ.');
         }
-        if (!data || typeof data !== 'object') {
-          throw new Error('Agent AI gửi dữ liệu SSE không hợp lệ.');
-        }
-
-        if (eventName === 'response.start') {
-          conversation.threadId = data.session_id || data.thread_id || conversation.threadId;
-        } else if (eventName === 'response.final_response.chunk') {
-          if (typeof data.content !== 'string') {
-            throw new Error('Agent AI gửi chunk phản hồi không hợp lệ.');
+        conversation.threadId = result.thread_id || conversation.threadId;
+        streamedReply = result.reply;
+        interrupted = Boolean(result.interrupted);
+        streamComplete = true;
+      } else {
+        await readSseStream(response, (eventName, rawData) => {
+          let data;
+          try {
+            data = JSON.parse(rawData);
+          } catch (error) {
+            throw new Error('Agent AI gửi event SSE không hợp lệ.');
           }
-          streamedReply += data.content;
-          pending.classList.add('pending');
-          pending.removeAttribute('role');
-          pending.removeAttribute('aria-label');
-          renderAssistantContent(pending, streamedReply);
-          if (pendingNotice) pending.appendChild(pendingNotice);
-          messages.scrollTop = messages.scrollHeight;
-        } else if (eventName === 'response.complete') {
-          streamComplete = true;
-        } else if (eventName === 'response.error') {
-          throw new Error(
-            data.error_message || data.error || data.message || 'Agent AI không thể xử lý yêu cầu.'
-          );
-        } else if (eventName === 'interrupt') {
-          const interruptMessage = data.interrupt_message || data.message || data.content;
-          if (typeof interruptMessage === 'string') streamedReply += interruptMessage;
-          else if (!streamedReply) streamedReply = 'Agent AI đang chờ thông tin bổ sung.';
-          interrupted = true;
-          streamComplete = true;
-          pending.classList.add('pending');
-          renderAssistantContent(pending, streamedReply);
-          if (pendingNotice) pending.appendChild(pendingNotice);
-        }
-      });
+          if (!data || typeof data !== 'object') {
+            throw new Error('Agent AI gửi dữ liệu SSE không hợp lệ.');
+          }
+
+          if (eventName === 'response.start') {
+            conversation.threadId = data.session_id || data.thread_id || conversation.threadId;
+          } else if (eventName === 'response.final_response.chunk') {
+            if (typeof data.content !== 'string') {
+              throw new Error('Agent AI gửi chunk phản hồi không hợp lệ.');
+            }
+            streamedReply += data.content;
+            pending.classList.add('pending');
+            pending.removeAttribute('role');
+            pending.removeAttribute('aria-label');
+            renderAssistantContent(pending, streamedReply);
+            if (pendingNotice) pending.appendChild(pendingNotice);
+            messages.scrollTop = messages.scrollHeight;
+          } else if (eventName === 'response.complete') {
+            streamComplete = true;
+          } else if (eventName === 'response.error') {
+            throw new Error(
+              data.error_message || data.error || data.message || 'Agent AI không thể xử lý yêu cầu.'
+            );
+          } else if (eventName === 'interrupt') {
+            const interruptMessage = data.interrupt_message || data.message || data.content;
+            if (typeof interruptMessage === 'string') streamedReply += interruptMessage;
+            else if (!streamedReply) streamedReply = 'Agent AI đang chờ thông tin bổ sung.';
+            interrupted = true;
+            streamComplete = true;
+            pending.classList.add('pending');
+            renderAssistantContent(pending, streamedReply);
+            if (pendingNotice) pending.appendChild(pendingNotice);
+          }
+        });
+      }
 
       if (!streamComplete) {
         throw new Error('Luồng phản hồi từ Agent AI kết thúc trước khi hoàn tất.');
@@ -1038,7 +1249,36 @@ function wireAIChat(){
         createdAt: receivedAt,
         ...(interrupted ? { interrupted: true } : {})
       });
+      seatalkDelivery.reply = streamedReply;
+      seatalkDelivery.complete = true;
+      if (seatalkDelivery.requested) {
+        await sendSeatalkReply(seatalkDelivery);
+      } else if (pendingSeatalkDelivery === seatalkDelivery && !seatalkDialog?.open) {
+        pendingSeatalkDelivery = null;
+      }
+      if (filesToSend.length) {
+        userMessage.attachments.forEach(attachment => {
+          attachment.status = 'sent';
+        });
+        setAttachmentStatus(userMessageElement, 'sent');
+      }
     } catch (error) {
+      if (pendingSeatalkDelivery === seatalkDelivery) pendingSeatalkDelivery = null;
+      if (filesToSend.length) {
+        userMessage.attachments.forEach(attachment => {
+          attachment.status = 'failed';
+        });
+        setAttachmentStatus(userMessageElement, 'failed');
+      }
+      filesToSend.forEach(file => {
+        const alreadySelected = selectedFiles.some(selected =>
+          selected.name === file.name &&
+          selected.size === file.size &&
+          selected.lastModified === file.lastModified
+        );
+        if (!alreadySelected) selectedFiles.unshift(file);
+      });
+      renderSelectedFiles();
       pending.classList.add('error');
       const errorMessage = [
         streamedReply,
@@ -1149,7 +1389,35 @@ function wireAIChat(){
 }
 
 /* ======================= INIT EXECUTION ======================= */
-wireStaticControls();
-// updateModeBadge();
-loadData(false);
+async function initializeDashboard() {
+  const response = await fetch(apiUrl('/api/auth/me'), {
+    cache: 'no-store',
+    credentials: 'include'
+  });
+  if (response.status === 401) {
+    window.location.replace('/');
+    return;
+  }
+  const data = await response.json();
+  if (!response.ok || !data || typeof data.email !== 'string') {
+    throw new Error(data.error || 'Không thể xác minh phiên đăng nhập.');
+  }
+  window.PNAR_CURRENT_USER = data;
+  const userNameElement = document.getElementById('currentUserName');
+  if (userNameElement) {
+    userNameElement.textContent = data.name || data.email.split('@')[0];
+    userNameElement.title = data.email;
+  }
+  wireStaticControls();
+  loadData(false);
+}
+
+initializeDashboard().catch(error => {
+  console.error('Không thể khởi tạo dashboard:', error);
+  const loadingState = document.getElementById('loadingState');
+  if (loadingState) {
+    loadingState.textContent = 'Không thể khởi tạo dashboard: ' +
+      (error && error.message ? error.message : error);
+  }
+});
 </script>

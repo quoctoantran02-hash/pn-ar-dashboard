@@ -8,6 +8,12 @@
   .sidebar{width:250px;flex:none;background:linear-gradient(180deg,var(--navy) 0%,var(--navy-2) 100%);color:#c9cdf0;padding:22px 18px;display:flex;flex-direction:column;gap:22px;}
   .brand{display:flex;align-items:center;gap:12px;color:#fff;font-weight:700;font-size:16px;line-height:1.2;}
   .brand .icon{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--violet),var(--blue));display:flex;align-items:center;justify-content:center;font-size:18px;}
+  .user-session{position:relative;display:flex;align-items:center;gap:11px;min-width:0;padding:11px 12px;border:1px solid rgba(255,255,255,.11);border-radius:12px;background:linear-gradient(135deg,rgba(255,255,255,.09),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}
+  .user-session-avatar{position:relative;display:grid;flex:none;width:38px;height:38px;place-items:center;border:1px solid rgba(181,166,255,.28);border-radius:12px;background:linear-gradient(145deg,rgba(118,91,255,.3),rgba(66,88,209,.2));font-size:17px;}
+  .user-session-avatar::after{position:absolute;right:-2px;bottom:-2px;width:9px;height:9px;border:2px solid var(--navy);border-radius:50%;background:#42d7a0;content:"";}
+  .user-session-info{display:flex;flex:1;flex-direction:column;gap:3px;min-width:0;}
+  .user-session-info span{color:#a7add7;font-size:10.5px;font-weight:500;letter-spacing:.15px;}
+  .user-session-info strong{overflow:hidden;color:#f5f4ff;font-size:12px;font-weight:700;text-overflow:ellipsis;white-space:nowrap;}
   .nav{display:flex;flex-direction:column;gap:4px;}
   .nav a{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;color:#aab0dc;text-decoration:none;font-size:13.5px;font-weight:500;}
   .nav a.active{background:linear-gradient(135deg,var(--violet),#4d51e0);color:#fff;}
@@ -367,6 +373,10 @@
   .ai-chat-pdf-link:hover{border-color:#b9a8eb;box-shadow:0 3px 10px rgba(81,69,165,.12);text-decoration:underline;}
   .ai-chat-pdf-badge{flex:none;padding:3px 5px;border-radius:4px;background:#fff0ef;color:#c64248;font-size:9px;letter-spacing:.3px;}
   .ai-chat-pdf-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ai-chat-output-file-link{display:inline-flex;align-items:center;gap:7px;max-width:100%;margin:7px 3px 2px;padding:7px 9px;border:1px solid #e8d9e8;border-radius:9px;background:#fff;color:#5145a5;font-size:11.5px;font-weight:700;text-decoration:none;vertical-align:middle;transition:border-color .15s ease,box-shadow .15s ease;}
+  .ai-chat-output-file-link:hover{border-color:#b9a8eb;box-shadow:0 3px 10px rgba(81,69,165,.12);text-decoration:underline;}
+  .ai-chat-output-file-badge{flex:none;padding:3px 5px;border-radius:4px;background:#edf0ff;color:#5145a5;font-size:9px;letter-spacing:.3px;}
+  .ai-chat-output-file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .ai-chat-pending-text{display:inline-flex;}
   .ai-chat-bounce-char{display:inline-block;white-space:pre;animation:ai-chat-letter-bounce 1.15s ease-in-out infinite;animation-delay:calc(var(--char-index)*.045s);}
   @keyframes ai-chat-letter-bounce{0%,55%,100%{transform:translateY(0);}25%{transform:translateY(-4px);}}
@@ -381,6 +391,9 @@
   .ai-chat-seatalk-dialog button.secondary{border:1px solid #e3e1ec;background:#fff;color:#5d6178;}
   .ai-chat-message-attachments{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
   .ai-chat-message-attachment{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border-radius:7px;background:rgba(255,255,255,.65);font-size:10px;}
+  .ai-chat-attachment-status{width:100%;color:#53715f;font-size:9.5px;}
+  .ai-chat-attachment-status[data-status="sending"]{color:#77718c;}
+  .ai-chat-attachment-status[data-status="failed"]{color:#a52b26;}
   .ai-chat-form{border-top:1px solid rgba(214,190,211,.45);padding-top:12px;}
   .ai-chat-composer{padding:10px;border:1px solid rgba(226,190,218,.75);border-radius:13px;background:rgba(255,255,255,.9);box-shadow:0 4px 14px rgba(176,115,163,.08);}
   .ai-chat-form textarea{display:block;width:100%;resize:vertical;min-width:0;min-height:52px;max-height:130px;border:0;border-radius:8px;padding:4px 2px 8px;background:transparent;font:inherit;font-size:12.5px;outline:none;}

@@ -14,6 +14,13 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="brand"><div class="icon">🔔</div>PN/AR<br>Dashboard</div>
+    <div class="user-session">
+      <div class="user-session-avatar" aria-hidden="true">👋</div>
+      <div class="user-session-info">
+        <span>Xin chào!</span>
+        <strong id="currentUserName"></strong>
+      </div>
+    </div>
     <nav class="nav">
       <a class="active"><span>🔔</span>&nbsp; Overview</a>
       <!-- <a href="#"><span>📋</span>&nbsp; PN/AR List</a>
@@ -126,7 +133,7 @@
         <dialog class="ai-chat-seatalk-dialog" id="aiChatSeatalkDialog" aria-labelledby="aiChatSeatalkDialogMessage">
           <p id="aiChatSeatalkDialogMessage">Câu trả lời sẽ được gửi vào Seatalk của bạn khi hoàn tất quá trình phân tích!</p>
           <div class="ai-chat-seatalk-dialog-actions">
-            <button type="button">Oke</button>
+            <button type="button" id="aiChatSeatalkDialogConfirm">Oke</button>
             <button type="button" class="secondary" id="aiChatSeatalkDialogCancel">Cancel</button>
           </div>
         </dialog>

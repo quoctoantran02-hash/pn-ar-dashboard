@@ -6,7 +6,6 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parent
-DEFAULT_SEATALK_REDIRECT_URI = "https://pn-ar-dashboard.quoctoan-tran02.workers.dev/"
 PARTIALS = {
     "<!-- include:Styles -->": "Styles.html",
     "<!-- include:Script_Filters -->": "Script_Filters.html",
@@ -26,10 +25,9 @@ def build(
     seatalk_app_id = seatalk_app_id or os.environ.get(
         "SEATALK_APP_ID", "Nzk2MjY4MzcwMDIz"
     )
-    seatalk_redirect_uri = (
-        seatalk_redirect_uri
-        or os.environ.get("SEATALK_REDIRECT_URI")
-        or DEFAULT_SEATALK_REDIRECT_URI
+    seatalk_redirect_uri = seatalk_redirect_uri or os.environ.get(
+        "SEATALK_REDIRECT_URI",
+        f"http://127.0.0.1:{os.environ.get('LOCAL_AI_PORT', '8765')}/",
     )
 
     html = (ROOT_DIR / "index.html").read_text(encoding="utf-8")
@@ -85,7 +83,7 @@ def main() -> None:
         "--seatalk-redirect-uri",
         default=os.environ.get(
             "SEATALK_REDIRECT_URI",
-            DEFAULT_SEATALK_REDIRECT_URI,
+            f"http://127.0.0.1:{os.environ.get('LOCAL_AI_PORT', '8765')}/",
         ),
         help="Exact SeaTalk callback URI registered for the app.",
     )

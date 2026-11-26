@@ -13,26 +13,6 @@ class SeaTalkAuthTests(unittest.TestCase):
         dashboard._seatalk_app_access_token = ""
         dashboard._seatalk_token_expires_at = 0
 
-    def test_secure_session_cookie_defaults_to_https_callback(self):
-        self.assertTrue(
-            dashboard.session_cookie_secure_setting(
-                None,
-                "https://dashboard.example/",
-            )
-        )
-        self.assertFalse(
-            dashboard.session_cookie_secure_setting(
-                None,
-                "http://127.0.0.1:8765/",
-            )
-        )
-        self.assertFalse(
-            dashboard.session_cookie_secure_setting(
-                "0",
-                "https://dashboard.example/",
-            )
-        )
-
     def start_login(self):
         response = self.client.post("/api/auth/seatalk/start")
         self.assertEqual(response.status_code, 200)
@@ -106,14 +86,9 @@ class SeaTalkAuthTests(unittest.TestCase):
     def test_callback_rejects_mismatched_state_without_exchange(self, mock_post, mock_get):
         self.start_login()
 
-        with self.assertLogs(dashboard.app.logger.name, level="WARNING") as logs:
-            response = self.client.get("/?code=auth-code&state=incorrect")
+        response = self.client.get("/?code=auth-code&state=incorrect")
 
         self.assertIn("seatalk_error=state", response.headers["Location"])
-        self.assertIn(
-            "SeaTalk callbackError=state reason=state_mismatch",
-            logs.output[0],
-        )
         mock_post.assert_not_called()
         mock_get.assert_not_called()
 

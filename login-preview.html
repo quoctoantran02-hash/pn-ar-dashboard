@@ -542,8 +542,49 @@
       overflow: hidden;
     }
     .google-g { font-family: Arial, sans-serif; font-size: 21px; font-weight: 800; line-height: 1; }
+    .google-disabled-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      height: 56px;
+      margin-top: 10px;
+      padding: 0 16px;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      background: #e5e7eb;
+      box-shadow: none;
+      color: #858b98;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: not-allowed;
+      opacity: 1;
+    }
     #seatalk_login_app_info { display: none; }
-    #seatalk_login_button { display: flex; justify-content: center; width: 100%; min-height: 43px; margin-top: 10px; }
+    #seatalk_login_button {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      width: 100%;
+      min-height: 56px;
+      margin-top: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+    #seatalk_login_button:hover {
+      transform: translateY(-1px);
+      background: linear-gradient(135deg, #fff, #e8f2ff);
+      box-shadow: 0 8px 18px rgba(8, 100, 247, .2);
+    }
+    #seatalk_login_button:active { transform: translateY(0); }
+    #seatalk_login_button:focus-visible {
+      outline: 3px solid rgba(8, 100, 247, .28);
+      outline-offset: 3px;
+    }
 
     .demo-note {
       display: none;
@@ -809,7 +850,9 @@
 
           <button class="sign-in" type="submit">Sign In</button>
           <div class="divider">or</div>
-          <div class="google-button-container" id="google-button-container"></div>
+          <button class="google-disabled-button" type="button" disabled aria-disabled="true">
+            Continue with Google (Disabled)
+          </button>
           <div
             id="seatalk_login_app_info"
             data-redirect_uri="https://pn-ar-dashboard.quoctoan-tran02.workers.dev/"
@@ -820,7 +863,7 @@
           <div
             id="seatalk_login_button"
             data-size="small"
-            data-logo_size="22"
+            data-logo_size="26"
             data-copywriting="Continue with SeaTalk"
             data-theme="light"
             data-align="center"
@@ -896,43 +939,6 @@
       }
     }
 
-    function initializeGoogleLogin() {
-      const container = document.getElementById('google-button-container');
-      if (!window.PNAR_GOOGLE_CLIENT_ID) {
-        showLoginMessage('Google Login chưa được cấu hình. Hãy đặt GOOGLE_OAUTH_WEB_CLIENT_ID trên server.');
-        return;
-      }
-
-      google.accounts.id.initialize({
-        client_id: window.PNAR_GOOGLE_CLIENT_ID,
-        callback: async response => {
-          try {
-            const apiBase = (window.PNAR_API_BASE_URL || '').replace(/\/+$/, '');
-            const result = await fetch(apiBase + '/api/auth/google', {
-              method: 'POST',
-              credentials: 'include',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ credential: response.credential })
-            });
-            const data = await result.json();
-            if (!result.ok) throw new Error(data.error || 'Không thể đăng nhập bằng Google.');
-            window.location.replace('/');
-          } catch (error) {
-            showLoginMessage(error.message || 'Không thể kết nối đến máy chủ đăng nhập.');
-          }
-        }
-      });
-      google.accounts.id.renderButton(container, {
-        theme: 'outline',
-        size: 'large',
-        text: 'continue_with',
-        shape: 'rectangular',
-        logo_alignment: 'left',
-        locale: 'en',
-        width: Math.floor(container.getBoundingClientRect().width)
-      });
-    }
-
     initializeSeatalkLogin().then(shouldLoad => {
       if (!shouldLoad) return;
       const seatalkScript = document.createElement('script');
@@ -943,6 +949,5 @@
       document.body.appendChild(seatalkScript);
     });
   </script>
-  <script src="https://accounts.google.com/gsi/client?hl=en" async defer onload="initializeGoogleLogin()" onerror="showLoginMessage('Không thể tải dịch vụ đăng nhập Google. Hãy thử tải lại trang.')"></script>
 </body>
 </html>

@@ -60,13 +60,9 @@ AI_AGENT_URL = "https://smart.shopee.io/apis/smart/v1/orchestrator/deployments/i
 AI_AGENT_FILES_URL = (
     "https://smart.shopee.io/apis/smart/v1/orchestrator/deployments/invoke_with_files"
 )
-AI_AGENT_CONTINUE_INTERRUPT_URL = (
-    "https://smart.shopee.io/apis/smart/v1/orchestrator/deployments/"
-    "continue_agent_v2_interrupt"
-)
 AI_AGENT_DEPLOYMENT_HASH_ID = os.environ.get(
     "AI_AGENT_DEPLOYMENT_HASH_ID",
-    "57q27rzw5h8grj7dhm64pwzl", ## old haskey: kg0s8wvvabo4p158mw77qmgx
+    "kg0s8wvvabo4p158mw77qmgx",
 )
 AI_AGENT_ENDPOINT_KEY = os.environ.get("AI_AGENT_ENDPOINT_KEY", "")
 GOOGLE_OAUTH_WEB_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_WEB_CLIENT_ID", "")
@@ -759,9 +755,6 @@ def invoke_ai_agent(message, thread_id, user_id, files=None):
             return {
                 "reply": agent_response.get("interrupt_message", ""),
                 "thread_id": agent_response.get("thread_id") or thread_id,
-                "session_id": agent_response.get("session_id")
-                or agent_response.get("thread_id")
-                or thread_id,
                 "interrupted": True,
                 "interrupts": agent_response.get("interrupts", []),
             }
@@ -797,18 +790,6 @@ def invoke_ai_agent(message, thread_id, user_id, files=None):
             headers={"Accept": "text/event-stream"},
         )
         response.raise_for_status()
-        if "application/json" in response.headers.get("Content-Type", "").lower():
-            try:
-                result = response.json()
-            except ValueError as exc:
-                raise RuntimeError(
-                    "Agent AI trả về JSON không hợp lệ."
-                ) from exc
-            finally:
-                response.close()
-            if not isinstance(result, dict):
-                raise RuntimeError("Agent trả về envelope không hợp lệ.")
-            return result
         return response
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else "không rõ"
@@ -851,63 +832,6 @@ def relay_ai_agent_stream(upstream_response):
         yield f"event: response.error\ndata: {error_event}\n\n"
     finally:
         upstream_response.close()
-
-
-def continue_ai_agent_interrupt(session_id, interrupt_id, status, answers, user_id):
-    if not AI_AGENT_ENDPOINT_KEY:
-        raise ValueError(
-            "AI chưa được cấu hình. Hãy đặt AI_AGENT_ENDPOINT_KEY "
-            "rồi khởi động lại server."
-        )
-
-    payload = {
-        "endpoint_deployment_hash_id": AI_AGENT_DEPLOYMENT_HASH_ID,
-        "endpoint_deployment_key": AI_AGENT_ENDPOINT_KEY,
-        "user_id": user_id,
-        "session_id": session_id,
-        "ask_user_response": {
-            "interrupt_id": interrupt_id,
-            "status": status,
-            "answers": answers,
-        },
-    }
-
-    response = None
-    try:
-        response = requests.post(
-            AI_AGENT_CONTINUE_INTERRUPT_URL,
-            json=payload,
-            timeout=600,
-        )
-        response.raise_for_status()
-        result = response.json()
-    except requests.HTTPError as exc:
-        status_code = exc.response.status_code if exc.response is not None else "không rõ"
-        details = exc.response.text[:500] if exc.response is not None else str(exc)
-        app.logger.error(
-            "AI agent interrupt continuation returned HTTP %s: %s",
-            status_code,
-            details,
-        )
-        raise RuntimeError(
-            f"Không thể tiếp tục Agent AI (HTTP {status_code})."
-        ) from exc
-    except (requests.RequestException, ValueError) as exc:
-        app.logger.error("AI agent interrupt continuation failed: %s", exc)
-        raise RuntimeError("Không thể tiếp tục cuộc hội thoại với Agent AI.") from exc
-    finally:
-        if response is not None:
-            response.close()
-
-    if not isinstance(result, dict):
-        raise RuntimeError("Agent trả về envelope không hợp lệ khi tiếp tục.")
-    if result.get("status") != "success" or result.get("code") != 0:
-        raise RuntimeError(
-            result.get("error_message")
-            or result.get("error")
-            or "Agent không thể tiếp tục yêu cầu."
-        )
-    return result
 
 
 @app.get("/")
@@ -1082,48 +1006,6 @@ def ai_chat():
             "X-Accel-Buffering": "no",
         },
     )
-
-
-@app.post("/api/ai-chat/continue-interrupt")
-@login_required
-def continue_ai_chat_interrupt():
-    body = request.get_json(silent=True)
-    if not isinstance(body, dict):
-        return jsonify({"error": "Request body phải là JSON object."}), 400
-
-    session_id = body.get("session_id")
-    interrupt_id = body.get("interrupt_id")
-    status = body.get("status")
-    answers = body.get("answers", [])
-    if not isinstance(session_id, str) or not session_id.strip():
-        return jsonify({"error": "session_id không hợp lệ."}), 400
-    if not isinstance(interrupt_id, str) or not interrupt_id.strip():
-        return jsonify({"error": "interrupt_id không hợp lệ."}), 400
-    if not isinstance(status, str) or status not in {"answered", "cancelled"}:
-        return jsonify({"error": "status phải là answered hoặc cancelled."}), 400
-    if not isinstance(answers, list) or any(not isinstance(answer, str) for answer in answers):
-        return jsonify({"error": "answers phải là mảng chuỗi."}), 400
-    if status == "answered" and (
-        not answers or any(not answer.strip() for answer in answers)
-    ):
-        return jsonify({"error": "Hãy trả lời đầy đủ các câu hỏi của Agent AI."}), 400
-    if status == "cancelled":
-        answers = []
-
-    try:
-        result = continue_ai_agent_interrupt(
-            session_id.strip(),
-            interrupt_id.strip(),
-            status,
-            answers,
-            session["user"]["email"],
-        )
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 503
-    except RuntimeError as exc:
-        return jsonify({"error": str(exc)}), 502
-
-    return jsonify(result)
 
 
 @app.post("/api/seatalk/send-ai-reply")

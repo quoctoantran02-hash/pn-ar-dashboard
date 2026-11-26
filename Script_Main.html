@@ -855,220 +855,6 @@ function wireAIChat(){
     }
   };
 
-  const extractAskUserInterrupt = (payload, fallbackSessionId) => {
-    const root = payload && typeof payload === 'object' ? payload : {};
-    const data = root.data && typeof root.data === 'object' ? root.data : root;
-    const agentResponse = data.response && typeof data.response === 'object'
-      ? data.response
-      : data;
-    const interrupts = [
-      agentResponse.interrupts,
-      data.interrupts,
-      root.interrupts
-    ].find(Array.isArray) || [];
-    const askUserInterrupt = interrupts.find(interrupt =>
-      interrupt &&
-      (interrupt.kind === 'ask_user' || interrupt.interrupt_type === 'ask_user')
-    );
-    const isDirectAskUser = root.interrupt_type === 'ask_user' ||
-      data.interrupt_type === 'ask_user' ||
-      root.kind === 'ask_user';
-    const interrupt = askUserInterrupt || (isDirectAskUser ? root : null);
-    if (!interrupt) return null;
-
-    const rawSessionId = data.session_id ||
-      agentResponse.session_id ||
-      agentResponse.thread_id ||
-      root.session_id ||
-      root.thread_id ||
-      fallbackSessionId;
-    const rawInterruptId = interrupt.interrupt_id ||
-      interrupt.id ||
-      root.interrupt_id ||
-      data.interrupt_id;
-    const sessionId = typeof rawSessionId === 'string'
-      ? rawSessionId
-      : typeof rawSessionId === 'number'
-        ? String(rawSessionId)
-        : '';
-    const interruptId = typeof rawInterruptId === 'string'
-      ? rawInterruptId
-      : typeof rawInterruptId === 'number'
-        ? String(rawInterruptId)
-        : '';
-    if (!sessionId || !interruptId) {
-      throw new Error('Agent AI tạm dừng nhưng thiếu session_id hoặc interrupt_id.');
-    }
-
-    const questions = Array.isArray(interrupt.questions)
-      ? interrupt.questions
-      : Array.isArray(agentResponse.questions)
-        ? agentResponse.questions
-        : [];
-    return {
-      sessionId,
-      interruptId,
-      interruptMessage: interrupt.interrupt_message ||
-        agentResponse.interrupt_message ||
-        data.interrupt_message ||
-        root.interrupt_message ||
-        '',
-      questions
-    };
-  };
-
-  const setComposerPaused = paused => {
-    input.disabled = paused;
-    sendButton.disabled = paused;
-    if (attachButton) attachButton.disabled = paused;
-  };
-
-  const renderAskUserPanel = (message, conversation, interrupt) => {
-    const panel = document.createElement('div');
-    panel.className = 'ai-chat-interrupt';
-    panel.dataset.conversationId = conversation.id;
-    const questions = interrupt.questions.length
-      ? interrupt.questions
-      : ['Câu trả lời của bạn'];
-
-    questions.forEach((question, index) => {
-      const label = document.createElement('label');
-      label.className = 'ai-chat-interrupt-question';
-      const prompt = typeof question === 'string'
-        ? question
-        : question && (
-          question.question ||
-          question.prompt ||
-          question.text ||
-          question.title
-        );
-      label.textContent = prompt || `Câu hỏi ${index + 1}`;
-      const answer = document.createElement('textarea');
-      answer.rows = 2;
-      answer.required = true;
-      answer.dataset.interruptAnswer = String(index);
-      answer.setAttribute('aria-label', label.textContent);
-      label.appendChild(answer);
-      panel.appendChild(label);
-    });
-
-    const actions = document.createElement('div');
-    actions.className = 'ai-chat-interrupt-actions';
-    const submit = document.createElement('button');
-    submit.type = 'button';
-    submit.dataset.interruptAction = 'answered';
-    submit.textContent = 'Gửi câu trả lời';
-    const cancel = document.createElement('button');
-    cancel.type = 'button';
-    cancel.dataset.interruptAction = 'cancelled';
-    cancel.className = 'secondary';
-    cancel.textContent = 'Không trả lời';
-    actions.append(submit, cancel);
-    panel.appendChild(actions);
-    message.appendChild(panel);
-  };
-
-  const continueAskUser = async (conversation, panel, answers, status) => {
-    const actionButtons = panel.querySelectorAll('button');
-    actionButtons.forEach(button => {
-      button.disabled = true;
-    });
-    const waiting = addMessage('Đang tiếp tục cuộc hội thoại…', 'assistant', true);
-
-    try {
-      const response = await fetch(apiUrl('/api/ai-chat/continue-interrupt'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          session_id: conversation.pendingInterrupt.sessionId,
-          interrupt_id: conversation.pendingInterrupt.interruptId,
-          status,
-          answers
-        })
-      });
-      if (response.status === 401) {
-        window.location.replace('/');
-        return;
-      }
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(result.error || 'Không thể tiếp tục Agent AI.');
-      }
-
-      const nextInterrupt = extractAskUserInterrupt(
-        result,
-        conversation.pendingInterrupt.sessionId
-      );
-      const data = result.data && typeof result.data === 'object'
-        ? result.data
-        : result;
-      const agentResponse = data.response && typeof data.response === 'object'
-        ? data.response
-        : data;
-      const reply = result.reply ||
-        agentResponse.response_str ||
-        (!nextInterrupt && agentResponse.interrupt_message) ||
-        (!nextInterrupt && data.interrupt_message);
-      if (!nextInterrupt && typeof reply !== 'string') {
-        throw new Error('Agent AI trả về phản hồi tiếp tục không hợp lệ.');
-      }
-
-      const answeredAt = Date.now();
-      const answerText = status === 'cancelled'
-        ? 'Đã chọn không trả lời.'
-        : answers.join('\n');
-      panel.remove();
-      waiting.remove();
-      conversation.messages.push({
-        role: 'user',
-        text: answerText,
-        createdAt: answeredAt
-      });
-      addMessage(answerText, 'user', false, answeredAt);
-      conversation.pendingInterrupt = null;
-      conversation.threadId = nextInterrupt
-        ? nextInterrupt.sessionId
-        : agentResponse.session_id || agentResponse.thread_id || conversation.threadId;
-
-      const assistantText = nextInterrupt
-        ? [reply, nextInterrupt.interruptMessage].filter(Boolean).join('\n\n') ||
-          'Agent cần thêm thông tin:'
-        : reply;
-      const assistantAt = Date.now();
-      const assistantMessage = addMessage(assistantText, 'assistant', false, assistantAt);
-      const savedAssistantMessage = {
-        role: 'assistant',
-        text: assistantText,
-        createdAt: assistantAt
-      };
-      if (nextInterrupt) {
-        conversation.pendingInterrupt = nextInterrupt;
-        savedAssistantMessage.interrupt = nextInterrupt;
-        renderAskUserPanel(assistantMessage, conversation, nextInterrupt);
-      }
-      conversation.messages.push(savedAssistantMessage);
-    } catch (error) {
-      waiting.classList.add('error');
-      setAssistantMessage(
-        waiting,
-        error.message || 'Không thể tiếp tục Agent AI.'
-      );
-      actionButtons.forEach(button => {
-        button.disabled = false;
-      });
-    } finally {
-      conversation.updatedAt = Date.now();
-      saveHistory();
-      renderHistory();
-      if (activeConversation === conversation) {
-        setComposerPaused(Boolean(conversation.pendingInterrupt));
-        if (!conversation.pendingInterrupt) input.focus();
-      }
-      messages.scrollTop = messages.scrollHeight;
-    }
-  };
-
   const showWelcome = () => {
     messages.replaceChildren();
     if (welcomeTemplate) messages.appendChild(welcomeTemplate.cloneNode(true));
@@ -1195,15 +981,7 @@ function wireAIChat(){
         message.attachments
       );
       if (message.error) element.classList.add('error');
-      if (
-        message.interrupt &&
-        conversation.pendingInterrupt &&
-        message.interrupt.interruptId === conversation.pendingInterrupt.interruptId
-      ) {
-        renderAskUserPanel(element, conversation, conversation.pendingInterrupt);
-      }
     });
-    setComposerPaused(Boolean(conversation.pendingInterrupt));
     renderHistory();
     if (historyMenu) historyMenu.hidden = true;
     if (historyButton) historyButton.setAttribute('aria-expanded', 'false');
@@ -1211,7 +989,6 @@ function wireAIChat(){
 
   const startNewChat = () => {
     activeConversation = null;
-    setComposerPaused(false);
     selectedFiles = [];
     renderSelectedFiles();
     showWelcome();
@@ -1278,30 +1055,7 @@ function wireAIChat(){
     });
   }
 
-  messages.addEventListener('click', async event => {
-    const interruptAction = event.target.closest('[data-interrupt-action]');
-    if (interruptAction) {
-      const panel = interruptAction.closest('.ai-chat-interrupt');
-      const conversation = conversations.find(entry =>
-        entry.id === panel?.dataset.conversationId
-      );
-      if (!panel || !conversation || !conversation.pendingInterrupt) return;
-
-      const status = interruptAction.dataset.interruptAction;
-      const answers = status === 'answered'
-        ? Array.from(panel.querySelectorAll('[data-interrupt-answer]'))
-          .sort((first, second) =>
-            Number(first.dataset.interruptAnswer) - Number(second.dataset.interruptAnswer)
-          )
-          .map(answer => answer.value.trim())
-        : [];
-      if (status === 'answered' && answers.some(answer => !answer)) {
-        toast('Hãy trả lời đầy đủ các câu hỏi trước khi gửi.');
-        return;
-      }
-      await continueAskUser(conversation, panel, answers, status);
-      return;
-    }
+  messages.addEventListener('click', event => {
     if (event.target.closest('[data-seatalk-notice]') && seatalkDialog) {
       seatalkDialog.showModal();
       return;
@@ -1332,7 +1086,7 @@ function wireAIChat(){
   form.addEventListener('submit', async event => {
     event.preventDefault();
     const message = input.value.trim();
-    if (!message || sendButton.disabled || activeConversation?.pendingInterrupt) return;
+    if (!message || sendButton.disabled) return;
 
     if (!activeConversation) {
       activeConversation = {
@@ -1380,7 +1134,6 @@ function wireAIChat(){
     let streamedReply = '';
     let streamComplete = false;
     let interrupted = false;
-    let askUserInterrupt = null;
     let pendingNotice = null;
     const seatalkDelivery = {
       requested: false,
@@ -1431,40 +1184,13 @@ function wireAIChat(){
 
       if ((response.headers.get('content-type') || '').includes('application/json')) {
         const result = await response.json();
-        if (!result || typeof result !== 'object') {
+        if (!result || typeof result.reply !== 'string') {
           throw new Error('Agent AI trả về phản hồi không hợp lệ.');
         }
-        askUserInterrupt = extractAskUserInterrupt(result, conversation.threadId);
-        const data = result.data && typeof result.data === 'object'
-          ? result.data
-          : result;
-        const agentResponse = data.response && typeof data.response === 'object'
-          ? data.response
-          : data;
-        if (askUserInterrupt) {
-          conversation.threadId = askUserInterrupt.sessionId;
-          const precedingReply = result.reply || agentResponse.response_str;
-          streamedReply = [
-            precedingReply !== askUserInterrupt.interruptMessage
-              ? precedingReply
-              : '',
-            askUserInterrupt.interruptMessage
-          ].filter(Boolean).join('\n\n');
-          interrupted = true;
-          streamComplete = true;
-        } else if (typeof result.reply === 'string') {
-          conversation.threadId = result.thread_id || conversation.threadId;
-          streamedReply = result.reply;
-          interrupted = Boolean(result.interrupted);
-          streamComplete = true;
-        } else if (typeof agentResponse.response_str === 'string') {
-          conversation.threadId =
-            agentResponse.session_id || agentResponse.thread_id || conversation.threadId;
-          streamedReply = agentResponse.response_str;
-          streamComplete = true;
-        } else {
-          throw new Error('Agent AI trả về phản hồi không hợp lệ.');
-        }
+        conversation.threadId = result.thread_id || conversation.threadId;
+        streamedReply = result.reply;
+        interrupted = Boolean(result.interrupted);
+        streamComplete = true;
       } else {
         await readSseStream(response, (eventName, rawData) => {
           let data;
@@ -1475,20 +1201,6 @@ function wireAIChat(){
           }
           if (!data || typeof data !== 'object') {
             throw new Error('Agent AI gửi dữ liệu SSE không hợp lệ.');
-          }
-
-          if (eventName === 'interrupt' || data.is_interrupted) {
-            askUserInterrupt = extractAskUserInterrupt(data, conversation.threadId);
-            if (askUserInterrupt) {
-              conversation.threadId = askUserInterrupt.sessionId;
-              if (askUserInterrupt.interruptMessage) {
-                streamedReply +=
-                  (streamedReply ? '\n\n' : '') + askUserInterrupt.interruptMessage;
-              }
-              interrupted = true;
-              streamComplete = true;
-              return;
-            }
           }
 
           if (eventName === 'response.start') {
@@ -1526,27 +1238,17 @@ function wireAIChat(){
       if (!streamComplete) {
         throw new Error('Luồng phản hồi từ Agent AI kết thúc trước khi hoàn tất.');
       }
-      if (!streamedReply) {
-        streamedReply = askUserInterrupt
-          ? 'Agent cần thêm thông tin:'
-          : 'AI không trả về nội dung.';
-      }
+      if (!streamedReply) streamedReply = 'AI không trả về nội dung.';
       if (pendingNotice) pendingNotice.remove();
       const receivedAt = Date.now();
       setAssistantMessage(pending, streamedReply);
       setMessageTimestamp(pending, receivedAt);
-      const savedAssistantMessage = {
+      conversation.messages.push({
         role: 'assistant',
         text: streamedReply,
         createdAt: receivedAt,
         ...(interrupted ? { interrupted: true } : {})
-      };
-      if (askUserInterrupt) {
-        conversation.pendingInterrupt = askUserInterrupt;
-        savedAssistantMessage.interrupt = askUserInterrupt;
-        renderAskUserPanel(pending, conversation, askUserInterrupt);
-      }
-      conversation.messages.push(savedAssistantMessage);
+      });
       seatalkDelivery.reply = streamedReply;
       seatalkDelivery.complete = true;
       if (seatalkDelivery.requested) {
@@ -1600,7 +1302,7 @@ function wireAIChat(){
       saveHistory();
       renderHistory();
       input.disabled = false;
-      setComposerPaused(Boolean(conversation.pendingInterrupt));
+      sendButton.disabled = false;
       if (newChatButton) newChatButton.disabled = false;
       if (historyButton) historyButton.disabled = false;
       input.focus();

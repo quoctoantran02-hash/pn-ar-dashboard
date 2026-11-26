@@ -93,6 +93,12 @@ một thread khác. Lịch sử và thread được lưu trong trình duyệt th
 nhập và hết hạn sau 24 giờ. Có thể thay deployment bằng
 `AI_AGENT_DEPLOYMENT_HASH_ID`.
 
+Nếu Agent tạm dừng với interrupt `ask_user`, giao diện hiển thị `interrupt_message`
+và từng câu hỏi để người dùng trả lời theo đúng thứ tự. Backend tiếp tục cùng
+`session_id` qua `continue_agent_v2_interrupt`; nếu Agent lại hỏi, giao diện dùng
+`interrupt_id` mới nhất. Người dùng cũng có thể chọn **Không trả lời** để gửi
+`status: cancelled`.
+
 Khi người dùng chọn gửi phản hồi chờ lâu qua SeaTalk, nút **Oke** sẽ gửi câu trả
 lời sau khi AI hoàn tất. Backend dùng employee code có trong phiên SeaTalk hoặc
 tra cứu theo email đăng nhập; nếu phản hồi có PDF từ kho tài liệu AI, backend

@@ -1,4 +1,4 @@
-const BACKEND = "https://annotated-collection-sentences-ask.trycloudflare.com";
+const BACKEND = "https://orlando-wesley-clocks-fitting.trycloudflare.com";
 
 export default {
   async fetch(request, env) {

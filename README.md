@@ -140,13 +140,15 @@ Backend Flask chạy riêng trên VPS hoặc máy vật lý có IP cố định.
 
    ```powershell
    $env:GOOGLE_OAUTH_WEB_CLIENT_ID = "<WEB_CLIENT_ID>.apps.googleusercontent.com"
-   $env:SESSION_COOKIE_SECURE = "1"
    $env:FLASK_SECRET_KEY = "<LONG_RANDOM_SECRET>"
+   $env:SEATALK_REDIRECT_URI = "https://<worker-domain>/"
    $env:FRONTEND_ORIGINS = "https://pn-ar-dashboard.quoctoan-tran02.workers.dev"
    ```
 
    Giữ `FLASK_SECRET_KEY` ổn định qua các lần khởi động backend để các phiên
-   trong 24 giờ không bị mất.
+   trong 24 giờ không bị mất. Cookie session tự bật `Secure` khi
+   `SEATALK_REDIRECT_URI` dùng HTTPS; có thể đặt `SESSION_COOKIE_SECURE=1` để
+   bật tường minh.
 
 2. Đặt cùng `GOOGLE_OAUTH_WEB_CLIENT_ID` trong môi trường build frontend rồi build:
 
@@ -160,7 +162,7 @@ Backend Flask chạy riêng trên VPS hoặc máy vật lý có IP cố định.
    deploy Worker và thư mục `dist` theo cấu hình `wrangler.toml`. Callback tại
    Worker root được chuyển tiếp tới backend để kiểm tra state và hoàn tất phiên.
    Dùng domain Worker đã khai báo trong Authorized JavaScript origins của Google
-   OAuth client. Đặt `SESSION_COOKIE_SECURE=1` trên backend.
+   OAuth client.
 
 Không đặt API key Monee, Google OAuth token, Agent endpoint key hoặc secret
 khác trong frontend hoặc trong repository static.

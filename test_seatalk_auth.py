@@ -13,6 +13,26 @@ class SeaTalkAuthTests(unittest.TestCase):
         dashboard._seatalk_app_access_token = ""
         dashboard._seatalk_token_expires_at = 0
 
+    def test_secure_session_cookie_defaults_to_https_callback(self):
+        self.assertTrue(
+            dashboard.session_cookie_secure_setting(
+                None,
+                "https://dashboard.example/",
+            )
+        )
+        self.assertFalse(
+            dashboard.session_cookie_secure_setting(
+                None,
+                "http://127.0.0.1:8765/",
+            )
+        )
+        self.assertFalse(
+            dashboard.session_cookie_secure_setting(
+                "0",
+                "https://dashboard.example/",
+            )
+        )
+
     def start_login(self):
         response = self.client.post("/api/auth/seatalk/start")
         self.assertEqual(response.status_code, 200)

@@ -97,6 +97,13 @@ HOST = os.environ.get("LOCAL_AI_HOST", "0.0.0.0")
 PORT = int(os.environ.get("LOCAL_AI_PORT", "8765"))
 MAX_AI_MESSAGE_LENGTH = 4000
 
+
+def session_cookie_secure_setting(setting, redirect_uri):
+    if setting is None:
+        return redirect_uri.lower().startswith("https://")
+    return setting.lower() in {"1", "true", "yes"}
+
+
 app = Flask(__name__)
 app.logger.setLevel(logging.INFO)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or ""
@@ -119,8 +126,10 @@ app.config.update(
     SESSION_REFRESH_EACH_REQUEST=False,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "").lower()
-    in {"1", "true", "yes"},
+    SESSION_COOKIE_SECURE=session_cookie_secure_setting(
+        os.environ.get("SESSION_COOKIE_SECURE"),
+        SEATALK_REDIRECT_URI,
+    ),
 )
 FRONTEND_ORIGINS = {
     origin.strip().rstrip("/")

@@ -943,6 +943,17 @@
       if (!shouldLoad) return;
       const seatalkScript = document.createElement('script');
       seatalkScript.src = 'https://static.cdn.haiserve.com/seatalk/client/shared/sop/auth.js';
+      seatalkScript.onload = () => {
+        const button = document.getElementById('seatalk_login_button');
+        const seatalkLogin = window.SEATALK_LOGIN;
+        if (!seatalkLogin || typeof seatalkLogin.init !== 'function') {
+          showLoginMessage('Không thể khởi tạo nút đăng nhập SeaTalk.');
+          return;
+        }
+        if (button && !button.hasChildNodes()) {
+          seatalkLogin.init();
+        }
+      };
       seatalkScript.onerror = () => showLoginMessage(
         'Không thể tải dịch vụ đăng nhập SeaTalk. Hãy thử tải lại trang.'
       );

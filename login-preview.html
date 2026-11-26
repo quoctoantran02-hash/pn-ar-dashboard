@@ -19,6 +19,7 @@
       --orange: #ff6a1b;
       --ink: #14194e;
       --muted: #59628f;
+      --login-brand: var(--blue);
     }
 
     * { box-sizing: border-box; }
@@ -542,8 +543,57 @@
       overflow: hidden;
     }
     .google-g { font-family: Arial, sans-serif; font-size: 21px; font-weight: 800; line-height: 1; }
+    .google-disabled-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      height: 56px;
+      margin-top: 10px;
+      padding: 0 16px;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      background: #e5e7eb;
+      box-shadow: none;
+      color: #858b98;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: not-allowed;
+      opacity: 1;
+    }
     #seatalk_login_app_info { display: none; }
-    #seatalk_login_button { display: flex; justify-content: center; width: 100%; min-height: 43px; margin-top: 10px; }
+    #seatalk_login_button {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      width: 100%;
+      min-height: 56px;
+      margin-top: 10px;
+      padding: 0 16px;
+      border: 2px solid var(--login-brand);
+      border-radius: 12px;
+      background: linear-gradient(135deg, #fff, #f1f7ff);
+      box-shadow: 0 5px 14px rgba(8, 100, 247, .12);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+    #seatalk_login_button:hover {
+      transform: translateY(-1px);
+      background: linear-gradient(135deg, #fff, #e8f2ff);
+      box-shadow: 0 8px 18px rgba(8, 100, 247, .2);
+    }
+    #seatalk_login_button:active { transform: translateY(0); }
+    #seatalk_login_button:focus-visible {
+      outline: 3px solid rgba(8, 100, 247, .28);
+      outline-offset: 3px;
+    }
 
     .demo-note {
       display: none;
@@ -783,7 +833,7 @@
       <div class="auth-card">
         <div class="brand auth-brand" aria-label="monee">
           <span class="brand-symbol" aria-hidden="true"></span>
-          <span>monee<span class="brand-dot">.</span></span>
+          <span>monee<span class="brand-dot"></span></span>
         </div>
         <h2>Welcome back!</h2>
         <p class="auth-subtitle">Sign in to access PN/AR Dashboard</p>
@@ -809,7 +859,13 @@
 
           <button class="sign-in" type="submit">Sign In</button>
           <div class="divider">or</div>
+          <button class="google-disabled-button" type="button" disabled aria-disabled="true">
+            Continue with Google (Disabled)
+          </button>
+          <!-- Google Sign-In UI (uncomment to restore)
+          <div class="divider">or</div>
           <div class="google-button-container" id="google-button-container"></div>
+          -->
           <div
             id="seatalk_login_app_info"
             data-redirect_uri="https://pn-ar-dashboard.quoctoan-tran02.workers.dev/"
@@ -819,8 +875,8 @@
           ></div>
           <div
             id="seatalk_login_button"
-            data-size="small"
-            data-logo_size="22"
+            data-size="large"
+            data-logo_size="26"
             data-copywriting="Continue with SeaTalk"
             data-theme="light"
             data-align="center"
@@ -828,7 +884,7 @@
           <p class="demo-note" id="demo-note" role="status" aria-live="polite"></p>
         </form>
       </div>
-      <p class="help"><span aria-hidden="true">ⓘ</span>&nbsp; Need help? Contact <a href="mailto:quoctoan.tran02">quoctoan.tran02</a></p>
+      <p class="help"><span aria-hidden="true">ⓘ</span>&nbsp; Need help? Contact <a href="https://link.seatalk.io/profile/open?seatalk_id=1139465845">Toan Tran - VN Credit</a></p>
     </section>
   </main>
   <script src="/config.js"></script>
@@ -896,6 +952,7 @@
       }
     }
 
+    /* Google Sign-In initialization (uncomment to restore)
     function initializeGoogleLogin() {
       const container = document.getElementById('google-button-container');
       if (!window.PNAR_GOOGLE_CLIENT_ID) {
@@ -932,17 +989,38 @@
         width: Math.floor(container.getBoundingClientRect().width)
       });
     }
+    */
 
     initializeSeatalkLogin().then(shouldLoad => {
       if (!shouldLoad) return;
       const seatalkScript = document.createElement('script');
       seatalkScript.src = 'https://static.cdn.haiserve.com/seatalk/client/shared/sop/auth.js';
+      seatalkScript.onload = () => {
+        const initializeSeatalkButton = () => {
+          const button = document.getElementById('seatalk_login_button');
+          const seatalkLogin = window.SEATALK_LOGIN;
+          if (button && !button.hasChildNodes()) {
+            if (!seatalkLogin || typeof seatalkLogin.init !== 'function') {
+              showLoginMessage('Không thể khởi tạo nút đăng nhập SeaTalk.');
+              return;
+            }
+            seatalkLogin.init();
+          }
+        };
+        if (document.readyState === 'complete') {
+          initializeSeatalkButton();
+        } else {
+          window.addEventListener('load', initializeSeatalkButton, { once: true });
+        }
+      };
       seatalkScript.onerror = () => showLoginMessage(
         'Không thể tải dịch vụ đăng nhập SeaTalk. Hãy thử tải lại trang.'
       );
       document.body.appendChild(seatalkScript);
     });
   </script>
+  <!-- Google Identity Services SDK (uncomment to restore)
   <script src="https://accounts.google.com/gsi/client?hl=en" async defer onload="initializeGoogleLogin()" onerror="showLoginMessage('Không thể tải dịch vụ đăng nhập Google. Hãy thử tải lại trang.')"></script>
+  -->
 </body>
 </html>

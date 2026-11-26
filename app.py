@@ -472,26 +472,45 @@ def handle_seatalk_callback():
     expected_state = pending_login.get("state") if isinstance(pending_login, dict) else None
     expires_at = pending_login.get("expires_at") if isinstance(pending_login, dict) else None
 
-    if (
-        not isinstance(expected_state, str)
-        or not isinstance(expires_at, (int, float))
-        or time.time() >= expires_at
-        or not isinstance(returned_state, str)
-        or not hmac.compare_digest(returned_state, expected_state)
-    ):
+    if not isinstance(expected_state, str):
+        state_error = "session_state_missing"
+    elif not isinstance(expires_at, (int, float)):
+        state_error = "session_expiry_invalid"
+    elif time.time() >= expires_at:
+        state_error = "session_state_expired"
+    elif not isinstance(returned_state, str) or not returned_state:
+        state_error = "callback_state_missing"
+    elif not hmac.compare_digest(returned_state, expected_state):
+        state_error = "state_mismatch"
+    else:
+        state_error = None
+
+    if state_error:
+        app.logger.warning(
+            "SeaTalk callbackError=state reason=%s",
+            state_error,
+        )
         return redirect("/?seatalk_error=state")
 
     session.pop("seatalk_oauth", None)
     if request.args.get("error"):
+        app.logger.warning("SeaTalk callbackError=denied reason=provider_denied")
         return redirect("/?seatalk_error=denied")
 
     code = request.args.get("code", "")
     if not code or len(code) > 2048:
+        app.logger.warning(
+            "SeaTalk callbackError=code reason=authorization_code_missing_or_invalid"
+        )
         return redirect("/?seatalk_error=code")
 
     try:
         user = exchange_seatalk_code(code)
-    except (RuntimeError, ValueError):
+    except (RuntimeError, ValueError) as exc:
+        app.logger.warning(
+            "SeaTalk callbackError=exchange exception=%s",
+            type(exc).__name__,
+        )
         return redirect("/?seatalk_error=exchange")
 
     session.clear()

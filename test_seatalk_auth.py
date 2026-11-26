@@ -106,9 +106,14 @@ class SeaTalkAuthTests(unittest.TestCase):
     def test_callback_rejects_mismatched_state_without_exchange(self, mock_post, mock_get):
         self.start_login()
 
-        response = self.client.get("/?code=auth-code&state=incorrect")
+        with self.assertLogs(dashboard.app.logger.name, level="WARNING") as logs:
+            response = self.client.get("/?code=auth-code&state=incorrect")
 
         self.assertIn("seatalk_error=state", response.headers["Location"])
+        self.assertIn(
+            "SeaTalk callbackError=state reason=state_mismatch",
+            logs.output[0],
+        )
         mock_post.assert_not_called()
         mock_get.assert_not_called()
 

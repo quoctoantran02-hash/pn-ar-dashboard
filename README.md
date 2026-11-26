@@ -44,12 +44,14 @@ $env:SEATALK_APP_SECRET = "<SEATALK_APP_SECRET>"
 $env:AI_AGENT_ENDPOINT_KEY = "<ENDPOINT_KEY>"
 $env:LOCAL_AI_HOST = "0.0.0.0"
 $env:LOCAL_AI_PORT = "8765"
+$env:SEATALK_REDIRECT_URI = "http://127.0.0.1:8765/"
 .\.venv\Scripts\python.exe app.py
 ```
 
 Mở `http://127.0.0.1:8765` để đăng nhập. Dùng đúng host `127.0.0.1` vì đây là
 host trong SeaTalk Redirect URI; `localhost` và `127.0.0.1` không dùng chung
-cookie phiên. SeaTalk `state` được tạo và kiểm tra ở backend. Sau khi xác minh
+cookie phiên. Khi chạy local, đặt `SEATALK_REDIRECT_URI` như trên để ghi đè
+Worker URL mặc định. SeaTalk `state` được tạo và kiểm tra ở backend. Sau khi xác minh
 state, backend đổi authorization code lấy email hồ sơ SeaTalk rồi tạo phiên
 đăng nhập 24 giờ. Phiên được ký bằng key cục bộ trong `.flask_session_secret`.
 Không xóa key này khi server đang có phiên hoạt động; không chia sẻ hoặc commit
@@ -141,24 +143,25 @@ Backend Flask chạy riêng trên VPS hoặc máy vật lý có IP cố định.
    ```powershell
    $env:GOOGLE_OAUTH_WEB_CLIENT_ID = "<WEB_CLIENT_ID>.apps.googleusercontent.com"
    $env:FLASK_SECRET_KEY = "<LONG_RANDOM_SECRET>"
-   $env:SEATALK_REDIRECT_URI = "https://<worker-domain>/"
    $env:FRONTEND_ORIGINS = "https://pn-ar-dashboard.quoctoan-tran02.workers.dev"
    ```
 
    Giữ `FLASK_SECRET_KEY` ổn định qua các lần khởi động backend để các phiên
-   trong 24 giờ không bị mất. Cookie session tự bật `Secure` khi
-   `SEATALK_REDIRECT_URI` dùng HTTPS; có thể đặt `SESSION_COOKIE_SECURE=1` để
-   bật tường minh.
+   trong 24 giờ không bị mất. SeaTalk Redirect URI mặc định được đặt trong code
+   là `https://pn-ar-dashboard.quoctoan-tran02.workers.dev/`, nên cookie session
+   tự bật `Secure`. Chỉ đặt `SEATALK_REDIRECT_URI` hoặc
+   `SESSION_COOKIE_SECURE` nếu cần ghi đè mặc định.
 
-2. Đặt cùng `GOOGLE_OAUTH_WEB_CLIENT_ID` trong môi trường build frontend rồi build:
+2. Đặt cùng `GOOGLE_OAUTH_WEB_CLIENT_ID` trong môi trường build frontend rồi build.
+   Redirect URI mặc định giống backend; chỉ cần ghi đè `SEATALK_REDIRECT_URI`
+   nếu dùng Worker domain khác:
 
    ```powershell
    $env:FRONTEND_BACKEND_URL = ""
-   $env:SEATALK_REDIRECT_URI = "https://<worker-domain>/"
    .\.venv\Scripts\python.exe build_frontend.py
    ```
 
-3. Đặt cùng `SEATALK_REDIRECT_URI` trong cấu hình SeaTalk Open Platform, rồi
+3. Đặt Redirect URI mặc định trên trong cấu hình SeaTalk Open Platform, rồi
    deploy Worker và thư mục `dist` theo cấu hình `wrangler.toml`. Callback tại
    Worker root được chuyển tiếp tới backend để kiểm tra state và hoàn tất phiên.
    Dùng domain Worker đã khai báo trong Authorized JavaScript origins của Google

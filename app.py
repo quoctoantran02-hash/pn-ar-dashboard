@@ -72,8 +72,9 @@ AI_AGENT_ENDPOINT_KEY = os.environ.get("AI_AGENT_ENDPOINT_KEY", "")
 GOOGLE_OAUTH_WEB_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_WEB_CLIENT_ID", "")
 SEATALK_APP_ID = os.environ.get("SEATALK_APP_ID", "Nzk2MjY4MzcwMDIz")
 SEATALK_APP_SECRET = os.environ.get("SEATALK_APP_SECRET", "")
-SEATALK_REDIRECT_URI = os.environ.get(
-    "SEATALK_REDIRECT_URI", f"http://127.0.0.1:{os.environ.get('LOCAL_AI_PORT', '8765')}/"
+DEFAULT_SEATALK_REDIRECT_URI = "https://pn-ar-dashboard.quoctoan-tran02.workers.dev/"
+SEATALK_REDIRECT_URI = (
+    os.environ.get("SEATALK_REDIRECT_URI") or DEFAULT_SEATALK_REDIRECT_URI
 )
 SEATALK_TOKEN_URL = "https://openapi.seatalk.io/auth/app_access_token"
 SEATALK_CODE_EXCHANGE_URL = "https://openapi.seatalk.io/open_login/code2employee"

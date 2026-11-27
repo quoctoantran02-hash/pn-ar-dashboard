@@ -424,6 +424,11 @@ function wireAIChat(){
   let conversations = [];
   let selectedFiles = [];
   let pendingSeatalkDelivery = null;
+  let activeAbortController = null;
+
+  window.addEventListener('pagehide', () => {
+    if (activeAbortController) activeAbortController.abort();
+  });
 
   const sendSeatalkReply = async delivery => {
     if (delivery.sending || delivery.sent || !delivery.reply) return;
@@ -1107,6 +1112,7 @@ function wireAIChat(){
         Array.isArray(conversation.messages)
       ).map(conversation => ({
         ...conversation,
+        processing: false,
         messages: conversation.messages.filter(message =>
           message &&
           (message.role === 'user' || message.role === 'assistant') &&
@@ -1332,7 +1338,12 @@ function wireAIChat(){
   form.addEventListener('submit', async event => {
     event.preventDefault();
     const message = input.value.trim();
-    if (!message || sendButton.disabled || activeConversation?.pendingInterrupt) return;
+    if (
+      !message ||
+      sendButton.disabled ||
+      activeConversation?.pendingInterrupt ||
+      activeConversation?.processing
+    ) return;
 
     if (!activeConversation) {
       activeConversation = {
@@ -1347,6 +1358,7 @@ function wireAIChat(){
       conversations.unshift(activeConversation);
     }
     const conversation = activeConversation;
+    conversation.processing = true;
     const sentAt = Date.now();
     if (conversation.messages.length === 0) {
       messages.querySelector('.ai-welcome')?.remove();
@@ -1376,7 +1388,7 @@ function wireAIChat(){
     if (historyButton) historyButton.disabled = true;
     saveHistory();
     renderHistory();
-    const pending = addMessage('Đang chờ AI trả lời…', 'assistant', true);
+    const pending = addMessage('Đang xử lý yêu cầu…', 'assistant', true);
     let streamedReply = '';
     let streamComplete = false;
     let interrupted = false;
@@ -1400,6 +1412,8 @@ function wireAIChat(){
       pending.appendChild(pendingNotice);
       messages.scrollTop = messages.scrollHeight;
     }, 15000);
+    const abortController = new AbortController();
+    activeAbortController = abortController;
 
     try {
       let requestBody;
@@ -1418,7 +1432,8 @@ function wireAIChat(){
         method: 'POST',
         headers: requestHeaders,
         body: requestBody,
-        credentials: 'include'
+        credentials: 'include',
+        signal: abortController.signal
       });
       if (response.status === 401) {
         window.location.replace('/');
@@ -1561,6 +1576,7 @@ function wireAIChat(){
         setAttachmentStatus(userMessageElement, 'sent');
       }
     } catch (error) {
+      if (error.name === 'AbortError') return;
       if (pendingSeatalkDelivery === seatalkDelivery) pendingSeatalkDelivery = null;
       if (filesToSend.length) {
         userMessage.attachments.forEach(attachment => {
@@ -1594,6 +1610,10 @@ function wireAIChat(){
       });
     } finally {
       window.clearTimeout(waitNoticeTimer);
+      if (activeAbortController === abortController) {
+        activeAbortController = null;
+      }
+      conversation.processing = false;
       conversation.updatedAt = Date.now();
       conversations.sort((first, second) => second.updatedAt - first.updatedAt);
       conversations = conversations.slice(0, 20);

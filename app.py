@@ -4,6 +4,7 @@ import json
 import logging
 import mimetypes
 import os
+import queue
 import re
 import secrets
 import threading
@@ -96,6 +97,7 @@ SESSION_SECRET_FILE = Path(
 HOST = os.environ.get("LOCAL_AI_HOST", "0.0.0.0")
 PORT = int(os.environ.get("LOCAL_AI_PORT", "8765"))
 MAX_AI_MESSAGE_LENGTH = 4000
+AI_STREAM_HEARTBEAT_INTERVAL = 15
 
 app = Flask(__name__)
 app.logger.setLevel(logging.INFO)
@@ -680,6 +682,10 @@ def invoke_ai_agent(message, thread_id, user_id, files=None):
             )
         response = None
         try:
+            app.logger.info(
+                "AI agent request started (mode=files, thread_id=%s)",
+                thread_id or "<new>",
+            )
             response = requests.post(
                 AI_AGENT_FILES_URL,
                 data=form_data,
@@ -760,6 +766,10 @@ def invoke_ai_agent(message, thread_id, user_id, files=None):
 
     response = None
     try:
+        app.logger.info(
+            "AI agent request started (mode=stream, thread_id=%s)",
+            thread_id or "<new>",
+        )
         response = requests.post(
             AI_AGENT_URL,
             json=payload,
@@ -807,21 +817,78 @@ def invoke_ai_agent(message, thread_id, user_id, files=None):
 
 
 def relay_ai_agent_stream(upstream_response):
+    events = queue.Queue()
+    stop_event = threading.Event()
+    stream_finished = False
+
+    def read_upstream():
+        first_event_at = None
+        last_event_at = None
+        try:
+            upstream_response.encoding = upstream_response.encoding or "utf-8"
+            for line in upstream_response.iter_lines(decode_unicode=True):
+                if stop_event.is_set():
+                    break
+                if isinstance(line, bytes):
+                    line = line.decode("utf-8", errors="replace")
+                event_at = time.monotonic()
+                if first_event_at is None:
+                    first_event_at = event_at
+                    app.logger.info("AI agent first SSE event received")
+                last_event_at = event_at
+                events.put(("data", f"{line}\n"))
+        except requests.RequestException as exc:
+            if not stop_event.is_set():
+                app.logger.error("AI agent stream interrupted: %s", exc)
+                events.put(
+                    (
+                        "error",
+                        "event: response.error\ndata: "
+                        + json.dumps(
+                            {"error": "Kết nối đến Agent AI bị gián đoạn."},
+                            ensure_ascii=False,
+                        )
+                        + "\n\n",
+                    )
+                )
+        finally:
+            if last_event_at is not None:
+                app.logger.info("AI agent last SSE event received")
+            events.put(("complete", None))
+
+    reader = threading.Thread(
+        target=read_upstream,
+        name="ai-agent-stream-reader",
+        daemon=True,
+    )
+    reader.start()
     try:
-        upstream_response.encoding = upstream_response.encoding or "utf-8"
-        for line in upstream_response.iter_lines(decode_unicode=True):
-            if isinstance(line, bytes):
-                line = line.decode("utf-8", errors="replace")
-            yield f"{line}\n"
-    except requests.RequestException as exc:
-        app.logger.error("AI agent stream interrupted: %s", exc)
-        error_event = json.dumps(
-            {"error": "Kết nối đến Agent AI bị gián đoạn."},
-            ensure_ascii=False,
-        )
-        yield f"event: response.error\ndata: {error_event}\n\n"
+        while True:
+            try:
+                event_type, payload = events.get(
+                    timeout=AI_STREAM_HEARTBEAT_INTERVAL
+                )
+            except queue.Empty:
+                yield ": keep-alive\n\n"
+                continue
+            if event_type == "data":
+                yield payload
+            elif event_type == "error":
+                yield payload
+            elif event_type == "complete":
+                stream_finished = True
+                break
+    except (GeneratorExit, BrokenPipeError, ConnectionResetError):
+        app.logger.info("AI agent client disconnected before stream completed")
+        raise
     finally:
+        stop_event.set()
         upstream_response.close()
+        reader.join(timeout=1)
+        app.logger.info(
+            "AI agent upstream response closed (stream_finished=%s)",
+            stream_finished,
+        )
 
 
 def continue_ai_agent_interrupt(session_id, interrupt_id, status, answers, user_id):

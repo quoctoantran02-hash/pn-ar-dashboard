@@ -1,4 +1,4 @@
-const BACKEND = "https://twiki-ntsc-outdoor-charles.trycloudflare.com";
+const BACKEND = "https://championship-entities-publish-zoo.trycloudflare.com";
 
 export default {
   async fetch(request, env) {
